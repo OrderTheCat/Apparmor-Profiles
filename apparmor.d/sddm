@@ -1,0 +1,393 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2018-2021 Mikhail Morfikov
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/sddm
+@{att} = /att/sddm/
+profile sddm /{,usr/}bin/sddm flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+  include <abstractions/attached/base>
+  include <abstractions/authentication>
+  include <abstractions/bus/system/org.freedesktop.login1>
+  include <abstractions/fontconfig-cache-read>
+  include <abstractions/graphics>
+  include <abstractions/kde-strict>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/shells>
+  include <abstractions/upower-observe>
+  include <abstractions/wutmp>
+
+  capability audit_write,
+  capability chown,
+  capability dac_override,
+  capability dac_read_search,
+  capability fowner,
+  capability kill,
+  capability net_admin,
+  capability setgid,
+  capability setuid,
+  capability sys_resource,
+  capability sys_tty_config,
+
+  network netlink raw,
+
+  ptrace (read),
+  ptrace (trace) peer=@{profile_name},
+
+  signal (receive) set=(hup) peer=@{p_systemd},
+  signal (send) set=(kill, term) peer=labwc,
+  signal (send) set=(kill, term) peer=lxqt-session,
+  signal (send) set=(kill, term) peer=startplasma,
+  signal (send) set=(kill, term) peer=xorg,
+  signal (send) set=(kill, term) peer=xsetroot,
+  signal (send) set=(term) peer=kwin_wayland,
+  signal (send) set=(term) peer=sddm-greeter,
+  signal (send) set=(term) peer=startplasma-wayland,
+  signal (send) set=(term) peer=startlxqtwayland,
+
+  unix type=stream addr=@@{udbus}/bus/sddm-helper/system,
+
+  #aa/dbus own bus=system name=org.freedesktop.DisplayManager
+  include <abstractions/bus/system/own>
+  dbus bind bus=system name=org.freedesktop.DisplayManager{,.*},
+  dbus receive bus=system path=/org/freedesktop/DisplayManager{,/**}
+       interface=org.freedesktop.DisplayManager{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=system path=/org/freedesktop/DisplayManager{,/**}
+       interface=org.freedesktop.DisplayManager{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=system path=/org/freedesktop/DisplayManager{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=system path=/org/freedesktop/DisplayManager{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=system path=/org/freedesktop/DisplayManager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.DisplayManager{,.*}}"),
+  dbus send bus=system path=/org/freedesktop/DisplayManager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  #aa/dbus talk bus=system name=org.freedesktop.home1 interface=org.freedesktop.home1.Manager label="@{p_systemd_homed}"
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label="@{p_systemd_homed}"),
+  # org.freedesktop.home1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/home1{,/**}
+       interface=org.freedesktop.home1.Manager
+       peer=(name="{@{busname},org.freedesktop.home1{,.*},org.freedesktop.DBus}", label="@{p_systemd_homed}"),
+  dbus send bus=system path=/org/freedesktop/home1{,/**}
+       interface=org.freedesktop.home1.Manager
+       peer=(name="org.freedesktop.home1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/home1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.home1{,.*},org.freedesktop.DBus}", label="@{p_systemd_homed}"),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/home1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.home1{,.*},org.freedesktop.DBus}", label="@{p_systemd_homed}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/home1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.home1{,.*},org.freedesktop.DBus}", label="@{p_systemd_homed}"),
+  dbus receive bus=system path=/org/freedesktop/home1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.home1{,.*},org.freedesktop.DBus}", label="@{p_systemd_homed}"),
+
+  #aa/dbus talk bus=system name=org.freedesktop.login1 interface=org.freedesktop.login1.Manager label="@{p_systemd_logind}"
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label="@{p_systemd_logind}"),
+  # org.freedesktop.login1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.login1.Manager
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label="@{p_systemd_logind}"),
+  dbus send bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.login1.Manager
+       peer=(name="org.freedesktop.login1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label="@{p_systemd_logind}"),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label="@{p_systemd_logind}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label="@{p_systemd_logind}"),
+  dbus receive bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label="@{p_systemd_logind}"),
+
+
+  @{exec_path} mr,
+
+  @{lib}/@{multiarch}/sddm/sddm-helper      rix,
+  @{lib}/plasma-dbus-run-session-if-needed  rix,
+  @{lib}/@{multiarch}/libexec/plasma-dbus-run-session-if-needed  rix,
+  @{lib}/{,sddm/}sddm-helper                rix,
+  @{lib}/{,sddm/}sddm-helper-start-wayland  rix,
+  @{lib}/{,sddm/}sddm-helper-start-x11user  rix,
+
+  @{shells_path}       rix,
+  @{bin}/{,e}grep      rix,
+  @{bin}/basename      rix,
+  @{bin}/cat           rix,
+  @{bin}/date          rix,
+  @{bin}/dirname       rix,
+  @{bin}/disable-paste rix,
+  @{bin}/find          rix,
+  @{bin}/id            rix,
+  @{bin}/locale        rix,
+  @{bin}/manpath       rix,
+  @{bin}/mktemp        rix,
+  @{bin}/pidof         rix,
+  @{bin}/readlink      rix,
+  @{bin}/realpath      rix,
+  @{bin}/sed           rix,
+  @{bin}/tr            rix,
+  @{bin}/tty           rix,
+  @{bin}/uname         rix,
+  @{bin}/xargs         rix,
+  @{bin}/xdm           r,
+  @{bin}/xmodmap       rix,
+  @{bin}/zoxide        rix,
+  @{sbin}/checkproc    rix,
+
+  @{bin}/dbus-run-session     rpx -> dbus-session,
+  @{bin}/dbus-update-activation-environment rpx -> dbus-session,
+  @{bin}/flatpak              rpx,
+  @{bin}/gnome-keyring-daemon rpx,
+  @{bin}/Hyprland             rpx,
+  @{bin}/ksecretd            rpux,
+  @{bin}/kwalletd{5,6}        rpx,
+  @{bin}/kwin_wayland         rpx,
+  @{bin}/labwc                rpx,
+  @{bin}/sddm-greeter{,-qt6}  rpx,
+  @{bin}/start-hyprland       rpx,
+  @{bin}/startlxqt            rpx,
+  @{bin}/startlxqtwayland     rpx,
+  @{bin}/startplasma-wayland  rpx,
+  @{bin}/startplasma-x11      rpx,
+  @{bin}/sway                rpux,
+  @{bin}/systemctl            rcx -> systemctl,
+  @{bin}/uwsm                rpux,
+  @{bin}/xauth                rcx -> xauth,
+  @{bin}/Xorg                 rpx,
+  @{bin}/xrandr               rpx,
+  @{bin}/xrdb                 rpx,
+  @{bin}/xset                 rpx,
+  @{bin}/xsetroot             rpx,
+  @{etc_ro}/sddm/wayland-session rpx,
+  @{etc_ro}/sddm/Xsession     rpx,
+  @{etc_ro}/X11/xdm/Xsession  rpx,
+
+  @{etc_ro}/X11/xdm/Xsetup                rix,
+  /usr/share/sddm/scripts/wayland-session rix,
+  /usr/share/sddm/scripts/Xsession        rix,
+  /usr/share/sddm/scripts/Xsetup          rix,
+  /usr/share/sddm/scripts/Xstop           rix,
+
+  /usr/share/plasma/desktoptheme/** r,
+  /usr/share/sddm/faces/.*.icon r,
+  /usr/share/sddm/themes/** r,
+  /usr/share/wayland-sessions/{,*.desktop} r,
+  /usr/share/xsessions/{,*.desktop} r,
+  /var/lib/AccountsService/icons/*.icon r,
+
+  /etc/X11/xinit/xinitrc.d/{,*} r,
+
+  @{etc_ro}/X11/Xmodmap r,
+  /etc/manpath.config r,
+  /etc/default/locale r,
+  /etc/locale.conf r,
+  /etc/machine-id r,
+  /etc/sddm.conf r,
+  /etc/sddm.conf.d/{,*} r,
+  /etc/shells r,
+  /etc/sysconfig/console r,
+  /etc/sysconfig/displaymanager r,
+  /etc/sysconfig/language r,
+  /etc/sysconfig/mail r,
+  /etc/sysconfig/proxy r,
+  /etc/sysconfig/windowmanager r,
+
+  / r,
+
+  /var/lib/lastlog/ r,
+  /var/lib/lastlog/* rwk,
+
+  /var/lib/wtmpdb/ r,
+  /var/lib/wtmpdb/* rwk,
+
+        @{SDDM_HOME}/state.conf rw,
+  owner @{SDDM_HOME}/** rw,
+  owner @{sddm_cache_dirs}/sddm-greeter/qmlcache/*.jsc mrw,
+  owner @{sddm_cache_dirs}/sddm-greeter/qmlcache/*.qmlc mrw,
+
+  owner @{HOME}/ r,
+  owner @{HOME}/.local/ w,
+  owner @{HOME}/.Xauthority rw,
+
+  owner @{user_config_dirs}/menus/{,**} r,
+  owner @{user_config_dirs}/startkderc r,
+
+  owner @{user_share_dirs}/kwalletd/ rw,
+  owner @{user_share_dirs}/kwalletd/kdewallet.salt rw,
+  owner @{user_share_dirs}/sddm/ w,
+  owner @{user_share_dirs}/sddm/wayland-session.log w,
+  owner @{user_share_dirs}/sddm/xorg-session.log w,
+
+        /tmp/sddm-* rw,
+        /tmp/xauth_@{rand6} rwl -> /tmp/#@{int},
+  owner @{tmp}/.@{rand6}/{,s} rw,
+  owner @{tmp}/#@{int} rw,
+  owner @{tmp}/sddm-auth* rw,
+
+        @{run}/systemd/io.systemd.Login rw,
+  @{att}@{run}/systemd/sessions/{,@{l}}@{int}.ref rw,
+
+        @{run}/faillock/@{user} rwk,
+        @{run}/sddm.pid rw,
+        @{run}/sddm/\{@{uuid}\} rw,
+        @{run}/sddm/#@{int} rw,
+        @{run}/sddm/xauth_@{rand6} rwl -> @{run}/sddm/#@{int},
+        @{run}/user/@{uid}/xauth_@{rand6} rwl,
+  owner @{run}/sddm/ rw,
+  owner @{run}/user/@{uid}/ r,
+  owner @{run}/user/@{uid}/#@{int} rw,
+  owner @{run}/user/@{uid}/kwallet5.socket rw,
+
+        @{PROC}/ r,
+        @{PROC}/uptime r,
+        @{PROC}/@{pids}/cmdline r,
+        @{PROC}/@{pids}/stat r,
+  owner @{PROC}/@{pid}/loginuid rw,
+  owner @{PROC}/@{pid}/mounts r,
+  owner @{PROC}/@{pid}/uid_map r,
+  owner @{PROC}/1/limits r,
+
+  /dev/tty@{u8} rw,
+  /dev/tty rw,
+
+  profile shell flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+    include <abstractions/attached/base>
+    include <abstractions/attached/consoles>
+    include <abstractions/shells>
+
+    ptrace read,
+
+    @{shells_path} mrix,
+
+    @{bin}/{,e}grep      rix,
+    @{bin}/basename      rix,
+    @{bin}/cat           rix,
+    @{bin}/date          rix,
+    @{bin}/dirname       rix,
+    @{bin}/disable-paste rix,
+    @{bin}/find          rix,
+    @{bin}/id            rix,
+    @{bin}/locale        rix,
+    @{bin}/manpath       rix,
+    @{bin}/mktemp        rix,
+    @{bin}/pidof         rix,
+    @{bin}/readlink      rix,
+    @{bin}/realpath      rix,
+    @{bin}/sed           rix,
+    @{bin}/tr            rix,
+    @{bin}/tty           rix,
+    @{bin}/uname         rix,
+    @{bin}/xargs         rix,
+    @{bin}/xdm           r,
+    @{bin}/xmodmap       rix,
+    @{bin}/zoxide        rix,
+    @{sbin}/checkproc    rix,
+
+    @{bin}/flatpak        px,
+    @{bin}/pacman         px -> sddm//pacman,
+
+    @{bin}/startplasma-wayland  rpx,
+    @{bin}/startplasma-x11      rpx,
+
+    @{lib}/plasma-dbus-run-session-if-needed  rix,
+    @{lib}/@{multiarch}/libexec/plasma-dbus-run-session-if-needed  rix,
+
+    /usr/share/sddm/scripts/{,**} r,
+
+    /etc/debuginfod/{,*} r,
+
+    owner @{user_share_dirs}/sddm/wayland-session.log w,
+    owner @{user_share_dirs}/sddm/xorg-session.log w,
+
+          @{PROC}/ r,
+          @{PROC}/@{pids}/ r,
+          @{PROC}/@{pids}/cmdline r,
+          @{PROC}/@{pids}/stat r,
+    owner @{PROC}/@{pid}/fd/ r,
+
+    include if exists <local/sddm_shell>
+  }
+
+  profile systemctl flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+    include <abstractions/attached/base>
+    include <abstractions/app/systemctl>
+
+    include if exists <local/sddm_systemctl>
+  }
+
+  profile xauth flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+    include <abstractions/attached/base>
+
+    @{bin}/xauth mr,
+
+    owner @{HOME}/.Xauthority-c rw,
+    owner @{HOME}/.Xauthority-l rwl -> @{HOME}/.Xauthority-c,
+    owner @{HOME}/.Xauthority-n rw,
+    owner @{HOME}/.Xauthority   rwl -> @{HOME}/.Xauthority-n,
+
+    owner @{user_share_dirs}/sddm/xorg-session.log w,
+
+    owner @{run}/sddm/\{@{uuid}\}-c rw,
+    owner @{run}/sddm/\{@{uuid}\}-l rwl -> @{run}/sddm/\{@{uuid}\}-c,
+    owner @{run}/sddm/\{@{uuid}\}-n rw,
+    owner @{run}/sddm/\{@{uuid}\}   rwl -> @{run}/sddm/\{@{uuid}\}-n,
+
+    include if exists <local/sddm_xauth>
+  }
+
+  profile pacman flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+    include <abstractions/attached/base>
+
+    @{bin}/pacman mr,
+
+    /var/lib/pacman/local/{,**} r,
+
+    include if exists <local/sddm_pacman>
+  }
+
+  include if exists <local/sddm>
+}
+
+# vim:syntax=apparmor

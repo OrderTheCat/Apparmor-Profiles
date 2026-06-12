@@ -1,0 +1,122 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2022 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/{,gvfs/}gvfsd
+@{att} = ""
+profile gvfsd /{,usr/}lib{,exec,32,64}/{,gvfs/}gvfsd flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/bus-session>
+  include <abstractions/nameservice-strict>
+
+  signal receive set=usr1 peer=pacman,
+  signal receive set=usr1 peer=pacman//pkill,
+
+  #aa/dbus own bus=session name=org.gtk.vfs.Daemon
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gtk.vfs.Daemon{,.*},
+  dbus receive bus=session path=/org/gtk/vfs/Daemon{,/**}
+       interface=org.gtk.vfs.Daemon{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gtk/vfs/Daemon{,/**}
+       interface=org.gtk.vfs.Daemon{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gtk/vfs/Daemon{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gtk/vfs/Daemon{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gtk/vfs/Daemon{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gtk.vfs.Daemon{,.*}}"),
+  dbus send bus=session path=/org/gtk/vfs/Daemon{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=session name=org.gtk.vfs.MountTracker path=/org/gtk/vfs/mounttracker
+  dbus bind bus=session name=org.gtk.vfs.MountTracker{,.*},
+  dbus receive bus=session path=/org/gtk/vfs/mounttracker
+       interface=org.gtk.vfs.MountTracker{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gtk/vfs/mounttracker
+       interface=org.gtk.vfs.MountTracker{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gtk/vfs/mounttracker
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gtk/vfs/mounttracker
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gtk/vfs/mounttracker
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gtk.vfs.MountTracker{,.*}}"),
+  dbus send bus=session path=/org/gtk/vfs/mounttracker
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  # The server side of abstractions/bus/session/org.gtk.vfs.Mountable
+  dbus send bus=session path=/org/gtk/vfs/mountable
+       interface=org.gtk.vfs.Mountable
+       member=Mount
+       peer=(name=@{busname}, label=gvfsd-*),
+
+  # The server side of abstractions/bus/session/org.gtk.vfs.Spawner
+  dbus receive bus=session path=/org/gtk/gvfs/exec_spaw/@{int}
+       interface=org.gtk.vfs.Spawner
+       member=Spawned
+       peer=(name=@{busname}, label=gvfsd-*),
+
+  dbus receive bus=session
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name=@{busname}, label="{gnome-shell,gnome-extension}"),
+
+  @{exec_path} mr,
+
+  @{sh_path}              rix,
+  @{lib}/{,gvfs/}gvfsd-*  rpx,
+  @{bin}/pkexec           rcx -> pkexec,
+
+  /usr/share/gvfs/{,**} r,
+
+  owner @{run}/user/@{uid}/gvfs/ rw,
+  owner @{run}/user/@{uid}/gvfsd/ rw,
+
+  owner @{PROC}/@{pid}/fd/ r,
+
+  profile pkexec flags=(complain) {
+    include <abstractions/base-strict>
+    include <abstractions/app/pkexec>
+
+    ptrace read peer=gvfsd,
+
+    @{lib}/{,gvfs/}gvfsd-admin rpx,
+
+    include if exists <local/gvfsd_pkexec>
+  }
+
+  include if exists <local/gvfsd>
+}
+
+# vim:syntax=apparmor

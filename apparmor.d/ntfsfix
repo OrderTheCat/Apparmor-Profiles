@@ -1,0 +1,28 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2019-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/ntfsfix
+@{att} = /att/ntfsfix/
+profile ntfsfix /{,usr/}bin/ntfsfix flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+  include <abstractions/disks-write>
+
+  capability dac_override,
+  capability dac_read_search,
+  capability sys_admin,
+
+  @{exec_path} mr,
+
+  owner @{PROC}/@{pid}/mounts r,
+
+  include if exists <local/ntfsfix>
+}
+
+# vim:syntax=apparmor

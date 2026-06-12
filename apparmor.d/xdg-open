@@ -1,0 +1,49 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2018-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+# Generic profile for xdg-open utility. It is an equivalent of child-open-any.
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/xdg-open
+@{att} = /att/xdg-open/
+profile xdg-open /{,usr/}bin/xdg-open flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+  include <abstractions/attached/base>
+  include <abstractions/app/open>
+  include <abstractions/common/xdg>
+  include <abstractions/path>
+
+  @{exec_path} r,
+
+  @{bin}/dbus-send            cx -> bus,
+  @{bin}/gdbus                cx -> bus,
+  @{bin}/xprop                px,
+  @{bin}/xdg-mime             px,
+
+  # Allow to open everything (equivalent to child-open-any)
+  @{bin}/**                     pux,
+  @{lib}/**                     pux,
+  @{user_bin_dirs}/**           pux,
+  /opt/*/**                     pux,
+  /usr/local/bin/**             pux,
+  /usr/share/**                 pux,
+
+  @{PROC}/version r,
+
+  profile bus flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+    include <abstractions/attached/base>
+    include <abstractions/app/bus>
+    include <abstractions/bus-session>
+    include <abstractions/attached/consoles>
+
+    include if exists <local/xdg-open_bus>
+  }
+
+  include if exists <local/xdg-open>
+}
+
+# vim:syntax=apparmor

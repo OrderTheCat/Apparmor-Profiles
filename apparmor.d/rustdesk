@@ -1,0 +1,128 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/rustdesk /usr/share/rustdesk/rustdesk
+@{att} = ""
+profile rustdesk /{{,usr/}bin/rustdesk,usr/share/rustdesk/rustdesk} flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/audio-client>
+  include <abstractions/bus-session>
+  include <abstractions/desktop>
+  include <abstractions/graphics>
+  include <abstractions/ssl_certs>
+  include <abstractions/fontconfig-cache-read>
+  include <abstractions/nameservice-strict>
+
+  capability dac_read_search,
+  capability dac_override,
+
+  network inet dgram,
+  network inet6 dgram,
+  network inet stream,
+  network inet6 stream,
+  network netlink raw,  # discovery
+
+  @{exec_path} mrix,
+
+  @{bin}/loginctl rpx,  # connection popup
+  @{bin}/ls rix,
+  @{bin}/which{,.debianutils} rix,
+
+  @{bin}/sudo           rcx -> sudo,
+  @{sh_path}            rpx -> rustdesk_shell,
+
+  /etc/gdm{,3}/custom.conf r,
+  /usr/share/rustdesk/{,**} r,
+  /usr/share/rustdesk/lib/*.so mr,
+  /usr/share/terminfo/** r,
+  /usr/share/uim/**.scm r,
+  /var/lib/uim/*.scm r,
+  /tmp/[rR]ust[dD]esk/{,**} rw,
+  owner /tmp/.X@{int}-unix/ r,
+
+  owner @{HOME}/ r,  # fails otherwise
+  owner @{HOME}/[rR]ust[dD]esk/{,**} rw,
+
+  owner @{HOME}/.local/ w,
+  owner @{user_share_dirs}/ w,
+  owner @{user_share_dirs}/logs/ w,
+  owner @{user_share_dirs}/logs/[rR]ust[dD]esk/{,**} rw,
+  owner @{user_config_dirs}/[rR]ust[dD]esk/{,**} rw,
+
+  owner @{sddm_share_dirs}/logs/ w,
+  owner @{sddm_share_dirs}/logs/[rR]ust[dD]esk/{,**} rw,
+  owner @{sddm_config_dirs}/[rR]ust[dD]esk/{,**} rw,
+
+  @{sys}/devices/system/cpu/cpufreq/policy@{int}/scaling_{cur,min,max}_freq r,
+  @{sys}/devices/@{pci}/net/*/address r,
+  @{sys}/fs/cgroup/user.slice/cpu.max r,
+  @{sys}/fs/cgroup/user.slice/user-@{uid}.slice/cpu.max r,
+  @{sys}/fs/cgroup/user.slice/user-@{uid}.slice/user@@{uid}.service/app.slice/cpu.max r,
+  @{sys}/fs/cgroup/user.slice/user-@{uid}.slice/user@@{uid}.service/cpu.max r,
+  @{sys}/fs/cgroup/system.slice/cpu.max r,
+  @{sys}/fs/cgroup/system.slice/rustdesk.service/* r,
+
+        @{PROC}/ r,
+        @{PROC}/uptime r,
+        @{PROC}/loadavg r,
+  owner @{PROC}/@{pid}/cgroup r,
+  owner @{PROC}/@{pid}/mountinfo r,
+
+  signal (receive) set=(kill, term) peer=rustdesk_shell,
+
+  profile sudo flags=(complain) {
+    include <abstractions/base-strict>
+    include <abstractions/app/sudo>
+
+    capability kill,
+
+    @{exec_path} rpx,
+
+    signal (receive) set=(kill, term) peer=rustdesk,
+
+    include if exists <local/rustdesk_sudo>
+  }
+  include if exists <local/rustdesk>
+}
+
+profile rustdesk_shell flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/nameservice-strict>
+
+  capability dac_override,
+  capability dac_read_search,
+  capability kill,
+
+  signal (send) set=(kill, term) peer=rustdesk,
+
+  @{sh_path}        r,
+
+  @{bin}/tr         rix,
+  @{bin}/{,f,e}grep rix,
+  @{bin}/tail       rix,
+  @{bin}/xargs      rix,
+  @{bin}/sed        rix,
+  @{bin}/cat        rix,
+  @{bin}/getent     rix,
+  @{bin}/whoami     rix,
+  @{bin}/{,g,m}awk  rix,
+  @{bin}/wc         rix,
+  @{bin}/kill       rix,
+
+  @{bin}/ps     rpx,
+  @{bin}/xrandr rpx,
+
+        @{PROC}/@{pid}/environ r,
+  owner @{PROC}/@{pid}/fd/ r,
+
+  /usr/share/rustdesk/{,**} r,
+
+  include if exists <local/rustdesk_shell>
+}
+
+# vim:syntax=apparmor

@@ -1,0 +1,47 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{name} = super{p,P}roductivity Super?Productivity
+@{domain} = org.chromium.Chromium
+@{lib_dirs} = /opt/@{name}
+@{config_dirs} = @{user_config_dirs}/@{name}
+@{cache_dirs} = @{user_cache_dirs}/@{name}
+
+@{exec_path} = @{bin}/@{name} @{lib_dirs}/@{name}
+@{att} = /att/superproductivity/
+profile superproductivity /{{,usr/}bin/super{p,P}roductivity,{,usr/}bin/Super?Productivity,opt/super{p,P}roductivity/super{p,P}roductivity,opt/super{p,P}roductivity/Super?Productivity,opt/Super?Productivity/super{p,P}roductivity,opt/Super?Productivity/Super?Productivity} flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/audio-client>
+  include <abstractions/bluetooth-observe>
+  include <abstractions/bus-system>
+  include <abstractions/common/electron>
+  include <abstractions/ibus-strict>
+  include <abstractions/screen-inhibit>
+  include <abstractions/session-manager>
+
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+  network netlink raw,
+
+  @{exec_path} mrix,
+
+  @{sh_path}                  rix,
+  @{bin}/gdbus                rix,
+  @{bin}/speech-dispatcher    rpx,
+  @{bin}/which{,.debianutils} rix,
+
+  @{open_path}         rpx -> child-open-strict,
+
+  owner @{run}/user/@{uid}/speech-dispatcher/speechd.sock rw,
+
+  include if exists <local/superproductivity>
+}
+
+# vim:syntax=apparmor

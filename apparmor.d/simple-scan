@@ -1,0 +1,50 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/simple-scan
+@{att} = /att/simple-scan/
+profile simple-scan /{,usr/}bin/simple-scan flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/avahi-observe>
+  include <abstractions/common/gnome>
+  include <abstractions/devices-usb>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/sys/dmi>
+  include <abstractions/user-download-strict>
+
+  network inet dgram,
+  network inet6 dgram,
+  network netlink raw,
+
+  @{exec_path} mr,
+
+  @{open_path}  rpx -> child-open-help,
+
+  @{system_share_dirs}/snmp/{,**} r,
+
+  /etc/sane.d/{,**} r,
+  /etc/snmp/snmp.conf r,
+
+  owner /var/lib/snmp/{mib,cert}_indexes/ rw,
+  owner /var/lib/snmp/mibs/{iana,ietf}/ r,
+  owner /var/lib/snmp/mibs/{iana,ietf}/[A-Z]* r,
+
+  @{sys}/bus/scsi/devices/ r,
+  @{sys}/devices/**/uevent r,
+
+  @{PROC}/scsi/scsi r,
+  @{PROC}/sys/dev/parport/ r,
+  @{PROC}/sys/dev/parport/parport@{int}/base-addr r,
+  @{PROC}/sys/dev/parport/parport@{int}/irq r,
+
+  /dev/video@{int} rw,
+
+  include if exists <local/simple-scan>
+}
+
+# vim:syntax=apparmor

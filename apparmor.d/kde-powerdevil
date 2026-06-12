@@ -1,0 +1,304 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path}  = @{lib}/org_kde_powerdevil
+@{exec_path} += @{lib}/@{multiarch}/{,libexec/}org_kde_powerdevil
+@{att} = /att/kde-powerdevil/
+profile kde-powerdevil /{{,usr/}lib{,exec,32,64}/org_kde_powerdevil,{,usr/}lib{,exec,32,64}/*-linux-gnu*/{,libexec/}org_kde_powerdevil,{,usr/}lib{,exec,32,64}/*-linux-gnu*/{,libexec/}org_kde_powerdevil} flags=(attach_disconnected,attach_disconnected.path=@{att} mediate_deleted,complain) {
+  include <abstractions/attached/base>
+  include <abstractions/audio-client>
+  include <abstractions/bus-session>
+  include <abstractions/bus/system/org.freedesktop.PolicyKit1>
+  include <abstractions/fontconfig-cache-read>
+  include <abstractions/graphics>
+  include <abstractions/ibus-strict>
+  include <abstractions/kde-strict>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/network-manager-observe>
+  include <abstractions/upower-observe>
+
+  capability wake_alarm,
+
+  network netlink raw,
+
+  #aa/dbus own bus=system name=org.freedesktop.Policy.Power
+  include <abstractions/bus/system/own>
+  dbus bind bus=system name=org.freedesktop.Policy.Power{,.*},
+  dbus receive bus=system path=/org/freedesktop/Policy/Power{,/**}
+       interface=org.freedesktop.Policy.Power{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=system path=/org/freedesktop/Policy/Power{,/**}
+       interface=org.freedesktop.Policy.Power{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=system path=/org/freedesktop/Policy/Power{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=system path=/org/freedesktop/Policy/Power{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=system path=/org/freedesktop/Policy/Power{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.Policy.Power{,.*}}"),
+  dbus send bus=system path=/org/freedesktop/Policy/Power{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=system name=org.kde.kf[56]auth path=/
+  dbus bind bus=system name=org.kde.kf[56]auth{,.*},
+  dbus receive bus=system path=/
+       interface=org.kde.kf[56]auth{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=system path=/
+       interface=org.kde.kf[56]auth{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=system path=/
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=system path=/
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=system path=/
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.kde.kf[56]auth{,.*}}"),
+  dbus send bus=system path=/
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  #aa/dbus own bus=session name=local.org_kde_powerdevil
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=local.org_kde_powerdevil{,.*},
+  dbus receive bus=session path=/local/org_kde_powerdevil{,/**}
+       interface=local.org_kde_powerdevil{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/local/org_kde_powerdevil{,/**}
+       interface=local.org_kde_powerdevil{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/local/org_kde_powerdevil{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/local/org_kde_powerdevil{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/local/org_kde_powerdevil{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},local.org_kde_powerdevil{,.*}}"),
+  dbus send bus=session path=/local/org_kde_powerdevil{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=session name=org.freedesktop.PowerManagement
+  dbus bind bus=session name=org.freedesktop.PowerManagement{,.*},
+  dbus receive bus=session path=/org/freedesktop/PowerManagement{,/**}
+       interface=org.freedesktop.PowerManagement{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/freedesktop/PowerManagement{,/**}
+       interface=org.freedesktop.PowerManagement{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/freedesktop/PowerManagement{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/freedesktop/PowerManagement{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/freedesktop/PowerManagement{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.PowerManagement{,.*}}"),
+  dbus send bus=session path=/org/freedesktop/PowerManagement{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=session name=org.kde.Solid.PowerManagement
+  dbus bind bus=session name=org.kde.Solid.PowerManagement{,.*},
+  dbus receive bus=session path=/org/kde/Solid/PowerManagement{,/**}
+       interface=org.kde.Solid.PowerManagement{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/kde/Solid/PowerManagement{,/**}
+       interface=org.kde.Solid.PowerManagement{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/kde/Solid/PowerManagement{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/kde/Solid/PowerManagement{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/kde/Solid/PowerManagement{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.kde.Solid.PowerManagement{,.*}}"),
+  dbus send bus=session path=/org/kde/Solid/PowerManagement{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  #aa/dbus talk bus=session name=org.kde.KWin path=/ label="kwin_{wayland,x11}"
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label="kwin_{wayland,x11}"),
+  # org.kde.KWin: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/
+       interface=org.kde.KWin{,.*}
+       peer=(name="{@{busname},org.kde.KWin{,.*},org.freedesktop.DBus}", label="kwin_{wayland,x11}"),
+  dbus send bus=session path=/
+       interface=org.kde.KWin{,.*}
+       peer=(name="org.kde.KWin{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.kde.KWin{,.*},org.freedesktop.DBus}", label="kwin_{wayland,x11}"),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.kde.KWin{,.*},org.freedesktop.DBus}", label="kwin_{wayland,x11}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.kde.KWin{,.*},org.freedesktop.DBus}", label="kwin_{wayland,x11}"),
+  dbus receive bus=session path=/
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.kde.KWin{,.*},org.freedesktop.DBus}", label="kwin_{wayland,x11}"),
+
+  #aa/dbus talk bus=system name=org.freedesktop.login1 label="@{p_systemd_logind}"
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label="@{p_systemd_logind}"),
+  # org.freedesktop.login1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.login1{,.*}
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label="@{p_systemd_logind}"),
+  dbus send bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.login1{,.*}
+       peer=(name="org.freedesktop.login1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label="@{p_systemd_logind}"),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label="@{p_systemd_logind}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label="@{p_systemd_logind}"),
+  dbus receive bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label="@{p_systemd_logind}"),
+
+
+  @{exec_path} mrix,
+
+  @{sh_path}          rix,
+  @{bin}/find         rix,
+  @{bin}/{,e}grep     rix,
+  @{bin}/kcminit      rpx,
+  @{bin}/sed          rix,
+  @{bin}/uname        rpx,
+  @{bin}/xargs        rix,
+  @{lib}/drkonqi      rpx,
+
+  /etc/fstab r,
+  /etc/machine-id r,
+
+  / r,
+  owner @{HOME}/ r,
+
+  owner @{user_cache_dirs}/ddcutil/* rw,
+  owner @{user_cache_dirs}/kcrash-metadata/{,*} rw,
+
+  owner @{user_config_dirs}/#@{int} rw,
+  owner @{user_config_dirs}/ksmserverrc r,
+  owner @{user_config_dirs}/powerdevilrc.lock rwk,
+  owner @{user_config_dirs}/powerdevilrc{,.@{rand6}} rwl -> @{user_config_dirs}/#@{int},
+  owner @{user_config_dirs}/powermanagementprofilesrc.lock rwk,
+  owner @{user_config_dirs}/powermanagementprofilesrc{,.@{rand6}} rwl -> @{user_config_dirs}/#@{int},
+
+  @{att}@{run}/systemd/inhibit/@{int}.ref rw,
+
+        @{run}/mount/utab r,
+  owner @{run}/user/@{uid}kcrash_@{int} rw,
+
+  @{run}/udev/data/c189:@{int} r,       # for /dev/bus/usb/**
+
+  @{sys}/bus/ r,
+  @{sys}/bus/i2c/devices/ r,
+  @{sys}/class/ r,
+  @{sys}/class/drm/ r,
+  @{sys}/class/i2c-dev/ r,
+  @{sys}/class/usbmisc/ r,
+  @{sys}/devices/ r,
+  @{sys}/devices/@{pci}/*_backlight/{,max_,actual_}brightness r,
+  @{sys}/devices/@{pci}/card@{int}/*/dpms r,
+  @{sys}/devices/@{pci}/drm/card@{int}/**/{,max_,actual_}brightness r,
+  @{sys}/devices/@{pci}/drm/card@{int}/**/*_id r,
+  @{sys}/devices/@{pci}/drm/card@{int}/**/dev r,
+  @{sys}/devices/@{pci}/drm/card@{int}/**/name r,
+  @{sys}/devices/@{pci}/drm/card@{int}/*/dpms r,
+  @{sys}/devices/@{pci}/drm/card@{int}/*/edid r,
+  @{sys}/devices/@{pci}/drm/card@{int}/*/enabled r,
+  @{sys}/devices/@{pci}/drm/card@{int}/*/status r,
+  @{sys}/devices/@{pci}/i2c-*/{,**/}name r,
+  @{sys}/devices/@{pci}/i2c-*/**/dev r,
+  @{sys}/devices/**/ r,
+  @{sys}/devices/**/uevent r,
+  @{sys}/devices/i2c-*/name r,
+  @{sys}/devices/platform/**/i2c-*/**/name r,
+  @{sys}/devices/platform/*/i2c-*/name r,
+
+  @{PROC}/@{pid}/fd/ r,
+  @{PROC}/@{pid}/mountinfo r,
+  @{PROC}/@{pid}/mounts r,
+
+  /dev/i2c-@{int} rwk,
+  /dev/rfkill r,
+  /dev/tty rw,
+
+  include if exists <local/kde-powerdevil>
+}
+
+# vim:syntax=apparmor

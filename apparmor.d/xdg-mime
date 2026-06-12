@@ -1,0 +1,48 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2018-2022 Mikhail Morfikov
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/xdg-mime
+@{att} = /att/xdg-mime/
+profile xdg-mime /{,usr/}bin/xdg-mime flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/common/xdg>
+
+  @{exec_path} r,
+
+  @{bin}/dbus-send            cx -> bus,
+  @{bin}/kbuildsycoca{,5}     px,
+  @{bin}/mimetype             px,
+  @{bin}/vendor_perl/mimetype px,
+  @{bin}/xprop                px,
+
+  /usr/share/file/misc/magic.mgc r,
+
+  owner @{user_config_dirs}/mimeapps.list{,.new} rw,
+
+  owner @{tmp}/wl-copy-buffer-@{rand6}/stdin r,
+
+  # file_inherit
+  deny /opt/*/** r,
+  deny owner @{user_config_dirs}/*/** rw,
+  deny owner @{tmp}/.org.chromium.Chromium.@{rand6} rw,
+  deny owner /dev/shm/.org.chromium.Chromium.@{rand6} rw,
+
+  profile bus flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/app/bus>
+    include <abstractions/bus-session>
+    include <abstractions/attached/consoles>
+
+    include if exists <local/xdg-mime_bus>
+  }
+
+  include if exists <local/xdg-mime>
+}
+
+# vim:syntax=apparmor

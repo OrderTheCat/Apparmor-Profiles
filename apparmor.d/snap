@@ -1,0 +1,422 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{bin_dirs} = @{bin}/ /snap/{snapd,core}/{,x}@{int}@{bin}
+@{lib_dirs} = @{lib}/ /snap/{snapd,core}/{,x}@{int}@{lib}
+
+@{exec_path} = @{bin_dirs}/snap
+@{att} = /att/snap/
+profile snap /{{,usr/}bin/snap,snap/{snapd,core}/{,x}[0-9]{[0-9],}{[0-9],}{[0-9],}{[0-9],}{[0-9],}{[0-9],}{[0-9],}{[0-9],}{[0-9],}/{,usr/}bin/snap} flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-session>
+  include <abstractions/bus-system>
+  include <abstractions/attached/consoles>
+  include <abstractions/disks-read>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/ssl_certs>
+
+  capability chown,
+  capability dac_override,
+  capability dac_read_search,
+  capability setuid,
+  capability sys_admin,
+  capability sys_ptrace,
+
+  network inet dgram,
+  network inet stream,
+  network inet6 dgram,
+  network inet6 stream,
+  network netlink raw,
+
+  ptrace read peer=snap.*,
+
+  unix (send, receive) type=stream peer=(label=apt),
+
+  mount options=(ro, silent) -> /tmp/snapd-auto-import-mount-@{int}/,
+
+  #aa/dbus own bus=session name=io.snapcraft.Launcher
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=io.snapcraft.Launcher{,.*},
+  dbus receive bus=session path=/io/snapcraft/Launcher{,/**}
+       interface=io.snapcraft.Launcher{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/io/snapcraft/Launcher{,/**}
+       interface=io.snapcraft.Launcher{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/io/snapcraft/Launcher{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/io/snapcraft/Launcher{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/io/snapcraft/Launcher{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},io.snapcraft.Launcher{,.*}}"),
+  dbus send bus=session path=/io/snapcraft/Launcher{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=session name=io.snapcraft.SessionAgent
+  dbus bind bus=session name=io.snapcraft.SessionAgent{,.*},
+  dbus receive bus=session path=/io/snapcraft/SessionAgent{,/**}
+       interface=io.snapcraft.SessionAgent{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/io/snapcraft/SessionAgent{,/**}
+       interface=io.snapcraft.SessionAgent{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/io/snapcraft/SessionAgent{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/io/snapcraft/SessionAgent{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/io/snapcraft/SessionAgent{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},io.snapcraft.SessionAgent{,.*}}"),
+  dbus send bus=session path=/io/snapcraft/SessionAgent{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=session name=io.snapcraft.Settings
+  dbus bind bus=session name=io.snapcraft.Settings{,.*},
+  dbus receive bus=session path=/io/snapcraft/Settings{,/**}
+       interface=io.snapcraft.Settings{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/io/snapcraft/Settings{,/**}
+       interface=io.snapcraft.Settings{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/io/snapcraft/Settings{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/io/snapcraft/Settings{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/io/snapcraft/Settings{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},io.snapcraft.Settings{,.*}}"),
+  dbus send bus=session path=/io/snapcraft/Settings{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  #aa/dbus talk bus=session name=io.snapcraft.PrivilegedDesktopLauncher label=snap.snap-store.*
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=snap.snap-store.*),
+  # io.snapcraft.PrivilegedDesktopLauncher: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/io/snapcraft/PrivilegedDesktopLauncher{,/**}
+       interface=io.snapcraft.PrivilegedDesktopLauncher{,.*}
+       peer=(name="{@{busname},io.snapcraft.PrivilegedDesktopLauncher{,.*},org.freedesktop.DBus}", label=snap.snap-store.*),
+  dbus send bus=session path=/io/snapcraft/PrivilegedDesktopLauncher{,/**}
+       interface=io.snapcraft.PrivilegedDesktopLauncher{,.*}
+       peer=(name="io.snapcraft.PrivilegedDesktopLauncher{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/io/snapcraft/PrivilegedDesktopLauncher{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},io.snapcraft.PrivilegedDesktopLauncher{,.*},org.freedesktop.DBus}", label=snap.snap-store.*),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/io/snapcraft/PrivilegedDesktopLauncher{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},io.snapcraft.PrivilegedDesktopLauncher{,.*},org.freedesktop.DBus}", label=snap.snap-store.*),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/io/snapcraft/PrivilegedDesktopLauncher{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},io.snapcraft.PrivilegedDesktopLauncher{,.*},org.freedesktop.DBus}", label=snap.snap-store.*),
+  dbus receive bus=session path=/io/snapcraft/PrivilegedDesktopLauncher{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},io.snapcraft.PrivilegedDesktopLauncher{,.*},org.freedesktop.DBus}", label=snap.snap-store.*),
+
+  #aa/dbus talk bus=session name=io.snapcraft.PrivilegedDesktopLauncher label=snap.snapd-desktop-integration.snapd-desktop-integration
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=snap.snapd-desktop-integration.snapd-desktop-integration),
+  # io.snapcraft.PrivilegedDesktopLauncher: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/io/snapcraft/PrivilegedDesktopLauncher{,/**}
+       interface=io.snapcraft.PrivilegedDesktopLauncher{,.*}
+       peer=(name="{@{busname},io.snapcraft.PrivilegedDesktopLauncher{,.*},org.freedesktop.DBus}", label=snap.snapd-desktop-integration.snapd-desktop-integration),
+  dbus send bus=session path=/io/snapcraft/PrivilegedDesktopLauncher{,/**}
+       interface=io.snapcraft.PrivilegedDesktopLauncher{,.*}
+       peer=(name="io.snapcraft.PrivilegedDesktopLauncher{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/io/snapcraft/PrivilegedDesktopLauncher{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},io.snapcraft.PrivilegedDesktopLauncher{,.*},org.freedesktop.DBus}", label=snap.snapd-desktop-integration.snapd-desktop-integration),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/io/snapcraft/PrivilegedDesktopLauncher{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},io.snapcraft.PrivilegedDesktopLauncher{,.*},org.freedesktop.DBus}", label=snap.snapd-desktop-integration.snapd-desktop-integration),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/io/snapcraft/PrivilegedDesktopLauncher{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},io.snapcraft.PrivilegedDesktopLauncher{,.*},org.freedesktop.DBus}", label=snap.snapd-desktop-integration.snapd-desktop-integration),
+  dbus receive bus=session path=/io/snapcraft/PrivilegedDesktopLauncher{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},io.snapcraft.PrivilegedDesktopLauncher{,.*},org.freedesktop.DBus}", label=snap.snapd-desktop-integration.snapd-desktop-integration),
+
+  #aa/dbus talk bus=session name=org.freedesktop.systemd1 label="@{p_systemd_user}"
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label="@{p_systemd_user}"),
+  # org.freedesktop.systemd1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.systemd1{,.*}
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label="@{p_systemd_user}"),
+  dbus send bus=session path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.systemd1{,.*}
+       peer=(name="org.freedesktop.systemd1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label="@{p_systemd_user}"),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label="@{p_systemd_user}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label="@{p_systemd_user}"),
+  dbus receive bus=session path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label="@{p_systemd_user}"),
+
+  #aa/dbus talk bus=system name=org.freedesktop.systemd1 label="@{p_systemd}"
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label="@{p_systemd}"),
+  # org.freedesktop.systemd1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.systemd1{,.*}
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label="@{p_systemd}"),
+  dbus send bus=system path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.systemd1{,.*}
+       peer=(name="org.freedesktop.systemd1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label="@{p_systemd}"),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label="@{p_systemd}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label="@{p_systemd}"),
+  dbus receive bus=system path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label="@{p_systemd}"),
+
+
+  dbus send bus=session path=/org/freedesktop/portal/documents
+       interface=org.freedesktop.portal.Documents
+       member=GetMountPoint
+       peer=(name=org.freedesktop.portal.Documents, label="{xdg-document-portal,unconfined}"),
+
+  dbus receive bus=session
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name=@{busname}, label="{gnome-shell,gnome-extension}"),
+
+  @{exec_path} mrix,
+
+  @{sh_path} mr,
+  @{bin}/getent rix,
+  @{bin}/mount rix,
+  @{bin}/zenity rix,
+
+  @{bin}/gpg{,2}          rcx -> gpg,
+  @{bin}/systemctl        rcx -> systemctl,
+  @{bin}/systemd-run      rcx -> run, # Start snap from the cli
+  @{bin}/unsquashfs       rcx -> unsquashfs,
+  @{bin}/xdg-settings     rcx -> xdg-settings,
+
+  @{bin_dirs}/xdelta3                 ix,
+  @{lib_dirs}/**                      mr,
+  @{lib_dirs}/snapd/snap-confine     rpx,
+  @{lib_dirs}/snapd/snap-seccomp     rpx,
+  @{lib_dirs}/snapd/snapd            rpx,
+
+  /etc/fstab r,
+
+  /var/lib/snapd/{,**} rwk,
+  /var/cache/snapd/commands.db rwk,
+  /var/cache/snapd/names r,
+
+  @{DESKTOP_HOME}/snap/{,**} rw,
+  /snap/{,**} rw,
+
+  @{HOME}/ r,
+  @{HOME}/.snap.mkdir-new/ rw,
+  @{HOME}/.snap/{,**} rw,
+  @{HOME}/snap/{,**} rw,
+
+  @{user_pkg_dirs}/** r,
+
+        @{tmp}/ r,
+  owner @{tmp}/read-file@{int}/{,**} w,
+  owner @{tmp}/snapd-auto-import-mount-@{int}/ rw,
+
+        @{run}/user/@{uid}/bus rw,
+  owner @{run}/user/@{uid}/.mutter-Xwaylandauth.@{rand6} r,
+  owner @{run}/user/@{uid}/gdm/Xauthority r,
+  owner @{run}/user/@{uid}/snap.*/ w,
+  owner @{run}/user/@{uid}/snapd-session-agent.socket rw,
+  owner @{run}/user/@{uid}/systemd/notify rw,
+
+  @{run}/mount/utab r,
+  @{run}/snapd.socket rw,
+
+  @{sys}/fs/cgroup/cgroup.controllers r,
+  @{sys}/fs/cgroup/system.slice/snapd.seeded.service/cpu.max r,
+  @{sys}/kernel/security/apparmor/features/{,**} r,
+
+        @{PROC}/@{pid}/cgroup r,
+        @{PROC}/@{pid}/mountinfo r,
+        @{PROC}/cgroups r,
+        @{PROC}/cmdline r,
+        @{PROC}/sys/kernel/random/uuid r,
+        @{PROC}/sys/kernel/seccomp/actions_avail r,
+        @{PROC}/version r,
+        @{PROC}/@{pid}/attr/apparmor/current r,
+  owner @{PROC}/@{pid}/mounts r,
+
+  /dev/tty@{u8} rw,
+  /dev/ttyS@{int} rw,
+
+  /apparmor/.null rw,
+
+  # file_inherit, safe to deny
+  deny owner @{user_share_dirs}/gvfs-metadata/* r,
+  deny owner @{user_share_dirs}/gnome-shell/session.gvdb rw,
+
+  profile gpg flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+
+    @{bin}/gpg{,2} mr,
+
+    @{bin}/dirmngr           rix,
+    @{bin}/gpg-agent         rix,
+    @{bin}/gpg-connect-agent rix,
+
+    owner @{HOME}/.snap/gnupg/ rw,
+    owner @{HOME}/.snap/gnupg/** rwkl,
+
+    include if exists <local/snap_gpg>
+  }
+
+  profile xdg-settings flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/desktop-files>
+
+    @{bin}/xdg-settings mr,
+
+    @{sh_path}       r,
+    @{bin}/{,e}grep  rix,
+    @{bin}/basename  rix,
+    @{bin}/cat        ix,
+    @{bin}/cut       rix,
+    @{bin}/head       ix,
+    @{bin}/mkdir      ix,
+    @{bin}/mktemp     ix,
+    @{bin}/mv         ix,
+    @{bin}/readlink   ix,
+    @{bin}/realpath  rix,
+    @{bin}/rm         ix,
+    @{bin}/sed        ix,
+    @{bin}/sleep      ix,
+    @{bin}/sort       ix,
+    @{bin}/touch      ix,
+    @{bin}/tr         ix,
+    @{bin}/uname      ix,
+    @{bin}/wc         ix,
+
+    @{bin}/xdg-mime   px,
+
+    / r,
+
+    include if exists <local/snap_xdg-settings>
+  }
+
+  profile run flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+
+    unix bind type=stream addr=@@{udbus}/bus/systemd-run/,
+
+    @{bin}/systemd-run mr,
+
+    owner @{run}/user/@{uid}/systemd/private rw,
+
+    include if exists <local/snap_run>
+  }
+
+  profile systemctl flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/app/systemctl>
+    include <abstractions/bus/system/org.freedesktop.systemd1>
+
+    capability net_admin,
+
+    network unix stream,
+    network (send receive) netlink raw,
+
+    owner @{run}/user/@{uid}/systemd/notify rw,
+    owner @{run}/user/@{uid}/systemd/private rw,
+
+    include if exists <local/snap_systemctl>
+  }
+
+  profile unsquashfs flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+
+    @{bin}/unsquashfs mr,
+
+    /**.snap r,
+
+    owner /tmp/read-file@{int}/unpack/{,**} w,
+
+    include if exists <local/snap_unsquashfs>
+  }
+
+  include if exists <local/snap>
+}
+
+# vim:syntax=apparmor

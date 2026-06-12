@@ -1,0 +1,16 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+  @{bin}/pam-tmpdir-helper rpx,
+  @{lib}/pam-tmpdir/pam-tmpdir-helper rpx,
+
+  # pam_limit
+  @{etc_ro}/security/limits.conf r,
+
+  # pam_env
+  @{etc_ro}/security/pam_env.conf r,
+  @{etc_ro}/security/pam_env.conf.d/ r,
+  @{etc_ro}/security/pam_env.conf.d/{,*.conf} r,
+
+# vim:syntax=apparmor

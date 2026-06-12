@@ -1,0 +1,96 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/gnome-terminal-server
+@{att} = ""
+profile gnome-terminal-server /{,usr/}lib{,exec,32,64}/gnome-terminal-server flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/audio-client>
+  include <abstractions/consoles>
+  include <abstractions/dconf-write>
+  include <abstractions/gnome-strict>
+  include <abstractions/nameservice-strict>
+
+  signal send set=(hup) peer=htop,
+  signal send set=(term hup kill) peer=unconfined,
+
+  ptrace read peer=htop,
+  ptrace read peer=unconfined,
+
+  #aa/dbus own bus=session name=org.gnome.Terminal
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gnome.Terminal{,.*},
+  dbus receive bus=session path=/org/gnome/Terminal{,/**}
+       interface=org.gnome.Terminal{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/Terminal{,/**}
+       interface=org.gnome.Terminal{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gnome/Terminal{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gnome/Terminal{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gnome/Terminal{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.Terminal{,.*}}"),
+  dbus send bus=session path=/org/gnome/Terminal{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  dbus receive bus=session path=/org/gnome/Terminal/SearchProvider
+       interface=org.gnome.Shell.SearchProvider2
+       peer=(name=@{busname}, label=gnome-shell),
+
+  dbus send bus=session path=/org/freedesktop/systemd1
+       interface=org.freedesktop.systemd1.Manager
+       member=StartTransientUnit
+       peer=(name=org.freedesktop.systemd1, label="@{p_systemd_user}"),
+
+  @{exec_path} mr,
+
+  @{bin}/byobu                     pux,
+  @{bin}/env                        ix,
+  @{lib}/gnome-terminal-preferences ix,
+
+  # The shell is not confined on purpose.
+  @{bin}/@{shells}            ux,
+
+  # Some CLI program can be launched directly from Gnome Shell
+  @{bin}/htop                 px,
+  @{bin}/micro               pux,
+  @{bin}/nvtop                px,
+
+  @{open_path}                px -> child-open-any,
+
+  /etc/shells r,
+
+  owner @{user_config_dirs}/*xdg-terminals.list* rw,
+  owner @{user_config_dirs}/ibus/bus/ r,
+  owner @{user_config_dirs}/ibus/bus/@{hex32}-unix-{,wayland-}@{int} r,
+
+  owner @{tmp}/#@{int} rw,
+
+  @{PROC}/@{pids}/cmdline r,
+  @{PROC}/@{pids}/cgroup r,
+
+  /dev/ptmx rw,
+
+  include if exists <local/gnome-terminal-server>
+}
+
+# vim:syntax=apparmor

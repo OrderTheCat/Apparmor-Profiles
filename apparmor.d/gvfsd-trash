@@ -1,0 +1,73 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2022 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/{,gvfs/}gvfsd-trash
+@{att} = ""
+profile gvfsd-trash /{,usr/}lib{,exec,32,64}/{,gvfs/}gvfsd-trash flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/bus-session>
+  include <abstractions/gvfs-backend>
+  include <abstractions/mime>
+  include <abstractions/nameservice-strict>
+  include <abstractions/trash-strict>
+
+  # When mounting a SMB share
+  network inet stream,
+  network inet6 stream,
+
+  unix (send receive) type=stream,
+
+  #aa/dbus own bus=session name=org.gtk.vfs.mountpoint_@{int}
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gtk.vfs.mountpoint_@{int}{,.*},
+  dbus receive bus=session path=/org/gtk/vfs/mountpoint_@{int}{,/**}
+       interface=org.gtk.vfs.mountpoint_@{int}{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gtk/vfs/mountpoint_@{int}{,/**}
+       interface=org.gtk.vfs.mountpoint_@{int}{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gtk/vfs/mountpoint_@{int}{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gtk/vfs/mountpoint_@{int}{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gtk/vfs/mountpoint_@{int}{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gtk.vfs.mountpoint_@{int}{,.*}}"),
+  dbus send bus=session path=/org/gtk/vfs/mountpoint_@{int}{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  @{exec_path} mr,
+
+  # Can restore all user files
+  owner @{HOME}/{,**} rw,
+  owner @{MOUNTS}/{,**} rw,
+
+  owner @{run}/user/@{uid}/gvfsd/ rw,
+  owner @{run}/user/@{uid}/gvfsd/socket-@{rand8} rw,
+
+  @{run}/mount/utab r,
+
+  owner @{PROC}/@{pid}/mountinfo r,
+  owner @{PROC}/@{pid}/mounts r,
+
+  include if exists <local/gvfsd-trash>
+}
+
+# vim:syntax=apparmor

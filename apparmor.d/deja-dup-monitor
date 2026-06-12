@@ -1,0 +1,117 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/deja-dup/deja-dup-monitor
+@{att} = ""
+profile deja-dup-monitor /{,usr/}lib{,exec,32,64}/deja-dup/deja-dup-monitor flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/bus-session>
+  include <abstractions/bus-system>
+  include <abstractions/bus/session/org.freedesktop.portal.Desktop>
+  include <abstractions/bus/session/org.gtk.Private.RemoteVolumeMonitor>
+  include <abstractions/bus/session/org.gtk.vfs.Daemon>
+  include <abstractions/bus/session/org.gtk.vfs.MountTracker>
+  include <abstractions/dconf-write>
+  include <abstractions/gschemas>
+  include <abstractions/nameservice-strict>
+  include <abstractions/network-manager-observe>
+  include <abstractions/notifications>
+  include <abstractions/power-profiles>
+  include <abstractions/upower-observe>
+
+  network netlink raw,
+
+  #aa/dbus own bus=session name=org.gnome.DejaDup.Monitor
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gnome.DejaDup.Monitor{,.*},
+  dbus receive bus=session path=/org/gnome/DejaDup/Monitor{,/**}
+       interface=org.gnome.DejaDup.Monitor{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/DejaDup/Monitor{,/**}
+       interface=org.gnome.DejaDup.Monitor{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gnome/DejaDup/Monitor{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gnome/DejaDup/Monitor{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gnome/DejaDup/Monitor{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.DejaDup.Monitor{,.*}}"),
+  dbus send bus=session path=/org/gnome/DejaDup/Monitor{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus talk bus=session name=org.gnome.DejaDup label=deja-dup
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=deja-dup),
+  # org.gnome.DejaDup: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/gnome/DejaDup{,/**}
+       interface=org.gnome.DejaDup{,.*}
+       peer=(name="{@{busname},org.gnome.DejaDup{,.*},org.freedesktop.DBus}", label=deja-dup),
+  dbus send bus=session path=/org/gnome/DejaDup{,/**}
+       interface=org.gnome.DejaDup{,.*}
+       peer=(name="org.gnome.DejaDup{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/gnome/DejaDup{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gnome.DejaDup{,.*},org.freedesktop.DBus}", label=deja-dup),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/gnome/DejaDup{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gnome.DejaDup{,.*},org.freedesktop.DBus}", label=deja-dup),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/gnome/DejaDup{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.DejaDup{,.*},org.freedesktop.DBus}", label=deja-dup),
+  dbus receive bus=session path=/org/gnome/DejaDup{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gnome.DejaDup{,.*},org.freedesktop.DBus}", label=deja-dup),
+
+
+  dbus receive bus=session path=/org/gnome/DejaDup
+       interface=org.gtk.Actions
+       member=Changed
+       peer=(name=@{busname}, label=deja-dup),
+
+  dbus receive bus=session
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name=@{busname}, label="{gnome-shell,gnome-extension}"),
+
+  @{exec_path} mr,
+
+  @{bin}/chrt       rix,
+  @{bin}/ionice     rix,
+  @{bin}/deja-dup    px,
+
+  /usr/share/gvfs/remote-volume-monitors/{,**} r,
+
+  /var/tmp/ r,
+  /tmp/ r,
+
+  @{run}/mount/utab r,
+
+  owner @{PROC}/@{pid}/mountinfo r,
+
+  include if exists <local/deja-dup-monitor>
+}
+
+# vim:syntax=apparmor

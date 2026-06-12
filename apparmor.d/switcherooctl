@@ -1,0 +1,52 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/switcherooctl
+@{att} = ""
+profile switcherooctl /{,usr/}bin/switcherooctl flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/bus-system>
+  include <abstractions/python>
+
+  #aa/dbus talk bus=system name=net.hadess.SwitcherooControl label=switcheroo-control
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=switcheroo-control),
+  # net.hadess.SwitcherooControl: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/net/hadess/SwitcherooControl{,/**}
+       interface=net.hadess.SwitcherooControl{,.*}
+       peer=(name="{@{busname},net.hadess.SwitcherooControl{,.*},org.freedesktop.DBus}", label=switcheroo-control),
+  dbus send bus=system path=/net/hadess/SwitcherooControl{,/**}
+       interface=net.hadess.SwitcherooControl{,.*}
+       peer=(name="net.hadess.SwitcherooControl{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/net/hadess/SwitcherooControl{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},net.hadess.SwitcherooControl{,.*},org.freedesktop.DBus}", label=switcheroo-control),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/net/hadess/SwitcherooControl{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},net.hadess.SwitcherooControl{,.*},org.freedesktop.DBus}", label=switcheroo-control),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/net/hadess/SwitcherooControl{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},net.hadess.SwitcherooControl{,.*},org.freedesktop.DBus}", label=switcheroo-control),
+  dbus receive bus=system path=/net/hadess/SwitcherooControl{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},net.hadess.SwitcherooControl{,.*},org.freedesktop.DBus}", label=switcheroo-control),
+
+
+  @{exec_path} mr,
+
+  include if exists <local/switcherooctl>
+}
+
+# vim:syntax=apparmor

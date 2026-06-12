@@ -1,0 +1,27 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+# LTTng is an open source tracing framework for Linux - https://lttng.org
+#
+# Lttng tracing is very noisy and should not be allowed by confined apps.
+#
+# !!! note
+#
+#     As this abstraction is included in the `base` / `base-strict` abstractions.
+#     It is not necessary to include it manually.
+#
+
+  abi <abi/4.0>,
+
+  deny       @{run}/shm/lttng-ust-@{int} rwl,
+  deny owner @{run}/shm/lttng-ust-@{int}-@{uid} rwl,
+  deny owner @{run}/shm/lttng-ust-@{int}-@{int} rwl,
+
+  deny       /dev/shm/lttng-ust-wait-@{int} rwl,
+  deny owner /dev/shm/lttng-ust-wait-@{int}-@{int} rwl,
+  deny owner /dev/shm/lttng-ust-wait-@{int}-@{uid} rwl,
+
+  include if exists <abstractions/lttng.d>
+
+# vim:syntax=apparmor

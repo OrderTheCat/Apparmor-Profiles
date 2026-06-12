@@ -1,0 +1,211 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/systemsettings
+@{att} = /att/systemsettings/
+profile systemsettings /{,usr/}bin/systemsettings flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+  include <abstractions/attached/base>
+  include <abstractions/audio-client>
+  include <abstractions/bus-session>
+  include <abstractions/bus/system/org.freedesktop.PolicyKit1>
+  include <abstractions/cups-client>
+  include <abstractions/dconf-write>
+  include <abstractions/graphics>
+  include <abstractions/ibus-strict>
+  include <abstractions/kde-strict>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/qt5-shader-cache>
+  include <abstractions/thumbnails-cache-write>
+
+  network netlink raw,
+
+  signal send set=term peer=kioworker,
+
+  #aa/dbus own bus=session name=org.kde.internal.KSettingsWidget_kcm_networkmanagement
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.kde.internal.KSettingsWidget_kcm_networkmanagement{,.*},
+  dbus receive bus=session path=/org/kde/internal/KSettingsWidget_kcm_networkmanagement{,/**}
+       interface=org.kde.internal.KSettingsWidget_kcm_networkmanagement{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/kde/internal/KSettingsWidget_kcm_networkmanagement{,/**}
+       interface=org.kde.internal.KSettingsWidget_kcm_networkmanagement{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/kde/internal/KSettingsWidget_kcm_networkmanagement{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/kde/internal/KSettingsWidget_kcm_networkmanagement{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/kde/internal/KSettingsWidget_kcm_networkmanagement{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.kde.internal.KSettingsWidget_kcm_networkmanagement{,.*}}"),
+  dbus send bus=session path=/org/kde/internal/KSettingsWidget_kcm_networkmanagement{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=session name=org.kde.systemsettings
+  dbus bind bus=session name=org.kde.systemsettings{,.*},
+  dbus receive bus=session path=/org/kde/systemsettings{,/**}
+       interface=org.kde.systemsettings{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/kde/systemsettings{,/**}
+       interface=org.kde.systemsettings{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/kde/systemsettings{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/kde/systemsettings{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/kde/systemsettings{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.kde.systemsettings{,.*}}"),
+  dbus send bus=session path=/org/kde/systemsettings{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  @{exec_path} mrix,
+
+  @{sh_path} rix,
+  @{bin}/cat rix,
+  @{bin}/eglinfo rpux,
+  @{bin}/kcminit rpx,
+  @{bin}/lspci rpx,
+  @{bin}/openssl rix,
+  @{bin}/orca rpux,
+  @{bin}/rsync rix,
+  @{bin}/pactl rpx,
+  @{bin}/plasma-discover rpx,
+  @{bin}/plasmashell rpx,
+  @{bin}/xdpyinfo rpux,
+  @{lib}/qt{5,6}/bin/qdbus rpx,
+  @{lib}/bup/cmd/bup rpux,
+  /{,usr/}lib{,exec,32,64}/*-linux-gnu*/{,libexec/}kf5/kioslave5 Px,
+  /{,usr/}lib{,exec,32,64}/*-linux-gnu*/{,libexec/}kf6/kioworker Px,
+  /{,usr/}lib{,exec,32,64}/kf5/kioslave5 Px,
+  /{,usr/}lib{,exec,32,64}/kf6/kioworker Px,
+
+  /usr/share/i18n/locales/{,*} r,
+  /usr/share/iso-codes/json/*.json r,
+  /usr/share/kcm_networkmanagement/{,**} r,
+  /usr/share/kcm_recentFiles/{,**} r,
+  /usr/share/kcmkeys/{,*.kksrc} r,
+  /usr/share/kglobalaccel/* r,
+  /usr/share/kinfocenter/{,**} r,
+  /usr/share/kpackage/{,**} r,
+  /usr/share/kservices{5,6}/{,**} r,
+  /usr/share/kservicetypes5/{,**} r,
+  /usr/share/kwin/{,**} r,
+  /usr/share/kxmlgui5/systemsettings/systemsettingsui.rc r,
+  /usr/share/libwacom/{,**} r,
+  /usr/share/plasma/{,**} r,
+  /usr/share/sddm/themes/{,**} r,
+  /usr/share/solid/{,**} r,
+  /usr/share/systemsettings/{,**} r,
+  /usr/share/thumbnailers/{,**} r,
+  /usr/share/wallpapers/{,**} r,
+
+  @{etc_ro}/login.defs r,
+  /etc/fstab r,
+  /etc/xdg/* r,
+  /etc/xdg/plasmanotifyrc r,
+  /etc/xdg/ui/ui_standards.rc r,
+
+  /var/cache/cracklib/cracklib_dict.* r,
+  /var/cache/samba/ rw,
+  /var/lib/AccountsService/icons/* r,
+  /var/lib/flatpak/repo/{,**} r,
+
+  owner @{HOME}/.face r,
+  owner @{HOME}/@{XDG_WALLPAPERS_DIR}/{,**} r,
+
+  owner @{user_cache_dirs}/[kK]* rwlk -> @{user_cache_dirs}/#@{int},
+  owner @{user_cache_dirs}/[kK]*/ rw,
+  owner @{user_cache_dirs}/[kK]*/** rwlk -> @{user_cache_dirs}/[kK]*/**,
+  owner @{user_cache_dirs}/#@{int} rwk,
+  owner @{user_cache_dirs}/plasma*/{,**} r,
+  owner @{user_cache_dirs}/plasma* rw,
+  owner @{user_cache_dirs}/systemsettings/ rw,
+  owner @{user_cache_dirs}/systemsettings/** rwlk -> @{user_cache_dirs}/systemsettings/**,
+
+  owner @{user_config_dirs}/[kK]* rwlk -> @{user_config_dirs}/#@{int},
+  owner @{user_config_dirs}/[kK]*/ rw,
+  owner @{user_config_dirs}/[kK]*/** rwlk -> @{user_config_dirs}/[kK]*/**,
+  owner @{user_config_dirs}/{P,p}lasma* r,
+  owner @{user_config_dirs}/*rc r,
+  owner @{user_config_dirs}/#@{int} rwk,
+  owner @{user_config_dirs}/autostart/ r,
+  owner @{user_config_dirs}/device_automounter_kcmrc.lock rwk,
+  owner @{user_config_dirs}/emaildefaults r,
+  owner @{user_config_dirs}/libaccounts-glib/ rw,
+  owner @{user_config_dirs}/libaccounts-glib/accounts.db{,-shm,-wal,-journal} rwk,
+  owner @{user_config_dirs}/plasma*/{,**} r,
+  owner @{user_config_dirs}/powerdevilrc.lock rwk,
+  owner @{user_config_dirs}/powerdevilrc{,.@{rand6}} rwl -> @{user_config_dirs}/#@{int},
+  owner @{user_config_dirs}/session/ rw,
+  owner @{user_config_dirs}/session/** rwlk,
+  owner @{user_config_dirs}/systemsettingsrc.lock rwk,
+  owner @{user_config_dirs}/systemsettingsrc{,.@{rand6}} rwl -> @{user_config_dirs}/#@{int},
+
+  owner @{user_share_dirs}/[kK]* rwlk -> @{user_share_dirs}/#@{int},
+  owner @{user_share_dirs}/[kK]*/ rw,
+  owner @{user_share_dirs}/[kK]*/** rwlk -> @{user_share_dirs}/[kK]*/**,
+  owner @{user_share_dirs}/#@{int} rwk,
+  owner @{user_share_dirs}/baloo/index r,
+  owner @{user_share_dirs}/systemsettings/ rw,
+  owner @{user_share_dirs}/systemsettings/** rwlk -> @{user_share_dirs}/systemsettings/**,
+  owner @{user_share_dirs}/user-places.xbel r,
+  owner @{user_share_dirs}/wallpapers/{,**} r,
+
+  owner @{user_state_dirs}/#@{int} rwk,
+  owner @{user_state_dirs}/systemsettingsstaterc{,.@{rand6}} rwlk,
+  owner @{user_state_dirs}/systemsettingsstaterc.lock rwlk,
+
+        @{run}/mount/utab r,
+  owner @{run}/user/@{uid}/#@{int} rwl,
+  owner @{run}/user/@{uid}/systemsettings@{rand6}.@{int}.kioworker.socket rwl -> @{run}/user/@{uid}/#@{int},
+
+  @{run}/udev/data/+drm:card@{int}-* r,   # For screen outputs
+
+  @{sys}/bus/ r,
+  @{sys}/bus/acpi/devices/ r,
+  @{sys}/bus/cpu/devices/ r,
+  @{sys}/class/ r,
+  @{sys}/firmware/acpi/pm_profile r,
+
+        @{PROC}/interrupts r,
+  owner @{PROC}/@{pid}/cmdline r,
+  owner @{PROC}/@{pid}/fd/ r,
+  owner @{PROC}/@{pid}/mountinfo r,
+  owner @{PROC}/@{pid}/mounts r,
+
+  /dev/ r,
+  /dev/bus/usb/ r,
+  /dev/input/ r,
+  /dev/rfkill r,
+  /dev/tty r,
+
+  include if exists <local/systemsettings>
+}
+
+# vim:syntax=apparmor

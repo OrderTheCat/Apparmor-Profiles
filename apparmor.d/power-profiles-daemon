@@ -1,0 +1,113 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/power-profiles-daemon
+@{att} = /att/power-profiles-daemon/
+profile power-profiles-daemon /{,usr/}lib{,exec,32,64}/power-profiles-daemon flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-system>
+  include <abstractions/bus/system/org.freedesktop.login1>
+  include <abstractions/bus/system/org.freedesktop.PolicyKit1>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/upower-observe>
+
+  capability dac_read_search,
+  capability net_admin,
+  capability sys_nice,
+
+  network netlink raw,
+
+  #aa/dbus own bus=system name=net.hadess.PowerProfiles
+  include <abstractions/bus/system/own>
+  dbus bind bus=system name=net.hadess.PowerProfiles{,.*},
+  dbus receive bus=system path=/net/hadess/PowerProfiles{,/**}
+       interface=net.hadess.PowerProfiles{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=system path=/net/hadess/PowerProfiles{,/**}
+       interface=net.hadess.PowerProfiles{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=system path=/net/hadess/PowerProfiles{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=system path=/net/hadess/PowerProfiles{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=system path=/net/hadess/PowerProfiles{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},net.hadess.PowerProfiles{,.*}}"),
+  dbus send bus=system path=/net/hadess/PowerProfiles{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=system name=org.freedesktop.UPower.PowerProfiles
+  dbus bind bus=system name=org.freedesktop.UPower.PowerProfiles{,.*},
+  dbus receive bus=system path=/org/freedesktop/UPower/PowerProfiles{,/**}
+       interface=org.freedesktop.UPower.PowerProfiles{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=system path=/org/freedesktop/UPower/PowerProfiles{,/**}
+       interface=org.freedesktop.UPower.PowerProfiles{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=system path=/org/freedesktop/UPower/PowerProfiles{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=system path=/org/freedesktop/UPower/PowerProfiles{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=system path=/org/freedesktop/UPower/PowerProfiles{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.UPower.PowerProfiles{,.*}}"),
+  dbus send bus=system path=/org/freedesktop/UPower/PowerProfiles{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  @{exec_path} mr,
+
+  / r,
+
+  /var/lib/power-profiles-daemon/{,**} rw,
+
+  @{run}/udev/data/+platform:* r,         # Identifies onboard devices (laptop/board model, power controllers, thermal sensors)
+  @{run}/udev/data/+power_supply:* r,     # For power supply devices (batteries, AC adapters, USB chargers)
+  @{run}/udev/data/+drm:card@{int}-* r,   # For screen outputs
+  @{run}/udev/data/c226:@{int} r,         # For /dev/dri/card[0-9]*
+
+  @{sys}/bus/ r,
+  @{sys}/bus/platform/devices/ r,
+  @{sys}/devices/platform/*/dytc_lapmode r,
+  @{sys}/class/ r,
+  @{sys}/class/drm/ r,
+  @{sys}/class/power_supply/ r,
+  @{sys}/devices/**/status r,
+  @{sys}/devices/**/power_supply/*/scope r,
+  @{sys}/devices/**/uevent r,
+  @{sys}/devices/system/cpu/*_pstate/{no_turbo,turbo_pct} r,
+  @{sys}/devices/system/cpu/cpu@{int}/power/energy_perf_bias rw,
+  @{sys}/devices/system/cpu/cpufreq/ r,
+  @{sys}/devices/system/cpu/cpufreq/policy@{int}/* rw,
+  @{sys}/firmware/acpi/platform_profile* rw,
+  @{sys}/firmware/acpi/pm_profile* rw,
+
+  include if exists <local/power-profiles-daemon>
+}
+
+# vim:syntax=apparmor

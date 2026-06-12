@@ -1,0 +1,40 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2015-2020 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/pulseeffects
+@{att} = ""
+profile pulseeffects /{,usr/}bin/pulseeffects flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/dconf-write>
+  include <abstractions/desktop>
+  include <abstractions/gstreamer>
+  include <abstractions/nameservice-strict>
+
+  network netlink raw,
+
+  @{exec_path} mr,
+
+  /etc/pipewire/pipewire.conf r,
+  /etc/pipewire/client.conf r,
+
+  owner @{user_config_dirs}/PulseEffects/ rw,
+  owner @{user_config_dirs}/PulseEffects/** rw,
+
+  owner @{user_config_dirs}/autostart/pulseeffects-service.desktop w,
+
+  owner @{PROC}/@{pid}/cmdline r,
+  owner @{PROC}/@{pid}/fd/ r,
+
+  # file_inherit
+  owner /dev/tty@{u8} rw,
+
+  include if exists <local/pulseeffects>
+}
+
+# vim:syntax=apparmor

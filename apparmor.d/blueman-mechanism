@@ -1,0 +1,82 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/blueman-mechanism @{lib}/blueman/blueman-mechanism
+@{att} = /att/blueman-mechanism/
+profile blueman-mechanism /{{,usr/}lib{,exec,32,64}/blueman-mechanism,{,usr/}lib{,exec,32,64}/blueman/blueman-mechanism} flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-system>
+  include <abstractions/fonts>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/python>
+
+  capability mknod,
+  capability net_admin,
+  capability sys_nice,
+
+  network inet stream,
+  network inet6 stream,
+  network netlink raw,
+
+  #aa/dbus own bus=system name=org.blueman.{m,M}echanism
+  include <abstractions/bus/system/own>
+  dbus bind bus=system name=org.blueman.{m,M}echanism{,.*},
+  dbus receive bus=system path=/org/blueman/{m,M}echanism{,/**}
+       interface=org.blueman.{m,M}echanism{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=system path=/org/blueman/{m,M}echanism{,/**}
+       interface=org.blueman.{m,M}echanism{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=system path=/org/blueman/{m,M}echanism{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=system path=/org/blueman/{m,M}echanism{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=system path=/org/blueman/{m,M}echanism{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.blueman.{m,M}echanism{,.*}}"),
+  dbus send bus=system path=/org/blueman/{m,M}echanism{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  @{exec_path} mr,
+
+  @{lib}/ r,
+
+  /var/lib/blueman/network.state rw,
+
+  owner @{PROC}/@{pid}/fd/ r,
+  owner @{PROC}/@{pid}/mounts r,
+
+  /dev/rfkill rw,
+
+  # For network AP
+  #@{sbin}/ip                 rix,
+  #@{sbin}/xtables-nft-multi rix,
+  #@{sbin}/dnsmasq           rpx,
+  #@{bin}/dhclient          rpx,
+  #      @{PROC}/sys/net/ipv4/ip_forward w,
+  #      @{PROC}/sys/net/ipv4/conf/ r,
+  #      @{PROC}/sys/net/ipv4/conf/*/forwarding w,
+  #owner @{run}/blueman-iptables rw,
+  #owner @{run}/blueman-netconfig rw,
+
+  include if exists <local/blueman-mechanism>
+}
+
+# vim:syntax=apparmor

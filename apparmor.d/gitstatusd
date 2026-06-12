@@ -1,0 +1,46 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path}  = @{user_cache_dirs}/gitstatus/gitstatusd{,-*}
+@{exec_path} += /usr/share/zsh-theme-powerlevel{9,10}k/gitstatus/usrbin/gitstatusd{,-*}
+@{att} = /att/gitstatusd/
+profile gitstatusd /{home/*/.cache/gitstatus/gitstatusd{,-*},usr/share/zsh-theme-powerlevel{9,10}k/gitstatus/usrbin/gitstatusd{,-*},usr/share/zsh-theme-powerlevel{9,10}k/gitstatus/usrbin/gitstatusd{,-*}} flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+
+  signal receive set=term peer=*//shell,
+  signal receive set=term peer={,vs}code,
+  signal receive set=term peer=code-shells,
+
+  unix (send receive) type=stream peer=(label=code),
+
+  @{exec_path} mr,
+
+  /etc/gitconfig r,
+
+  owner @{user_projects_dirs}/{,**} r,
+  owner @{user_projects_dirs}/**/.git/{,**/}.gitstatus.@{rand6}/{,**} rw,
+
+  owner @{HOME}/.gitconfig r,
+  owner @{user_config_dirs}/git/{,*} r,
+
+  owner @{tmp}/gitstatus.POWERLEVEL9K.*.fifo r,
+
+  # Silencer
+  deny capability dac_read_search,
+  deny capability dac_override,
+  deny network netlink raw,
+  deny /usr/share/{,**} r,
+  deny owner @{HOME}/.*-store/{,**} r,
+  deny owner @{user_config_dirs}/*/logs/{,**} rw,
+  deny owner @{user_share_dirs}/**/data.mdb rw,
+
+  include if exists <local/gitstatusd>
+}
+
+# vim:syntax=apparmor

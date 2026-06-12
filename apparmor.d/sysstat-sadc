@@ -1,0 +1,52 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/sysstat/sadc
+@{att} = ""
+profile sysstat-sadc /{,usr/}lib{,exec,32,64}/sysstat/sadc flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/disks-read>
+  include <abstractions/sys/hwmon>
+
+  capability sys_admin,
+
+  @{exec_path} mr,
+
+  /etc/sensors.d/{,**} r,
+  /etc/sensors3.conf r,
+
+  /var/log/sysstat/{,**} rwk,
+
+  @{sys}/bus/i2c/devices/ r,
+  @{sys}/bus/usb/devices/ r,
+  @{sys}/class/fc_host/ r,
+  @{sys}/class/i2c-adapter/ r,
+  @{sys}/class/power_supply/ r,
+  @{sys}/devices/**/duplex r,
+  @{sys}/devices/**/name r,
+  @{sys}/devices/**/speed r,
+
+  @{PROC}/@{pid}/net/* r,
+  @{PROC}/diskstats r,
+  @{PROC}/interrupts r,
+  @{PROC}/loadavg r,
+  @{PROC}/pressure/cpu r,
+  @{PROC}/pressure/io r,
+  @{PROC}/pressure/memory r,
+  @{PROC}/sys/fs/dentry-state r,
+  @{PROC}/sys/fs/file-nr r,
+  @{PROC}/sys/fs/inode-state r,
+  @{PROC}/sys/kernel/pty/nr r,
+  @{PROC}/tty/driver/serial r,
+  @{PROC}/uptime r,
+  @{PROC}/vmstat r,
+
+  include if exists <local/sysstat-sadc>
+}
+
+# vim:syntax=apparmor

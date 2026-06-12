@@ -1,0 +1,76 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/seahorse
+@{att} = /att/seahorse/
+profile seahorse /{,usr/}bin/seahorse flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/audio-client>
+  include <abstractions/avahi-observe>
+  include <abstractions/dconf-write>
+  include <abstractions/gnome-strict>
+  include <abstractions/p11-kit>
+  include <abstractions/pcscd>
+  include <abstractions/secrets-service>
+  include <abstractions/ssl_certs>
+
+  #aa/dbus own bus=session name=org.gnome.seahorse.Application interface+=org.gnome.Shell.SearchProvider2
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gnome.seahorse.Application{,.*},
+  dbus receive bus=session path=/org/gnome/seahorse/Application{,/**}
+       interface=org.gnome.seahorse.Application{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/seahorse/Application{,/**}
+       interface=org.gnome.seahorse.Application{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  dbus receive bus=session path=/org/gnome/seahorse/Application{,/**}
+       interface=org.gnome.Shell.SearchProvider2
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/seahorse/Application{,/**}
+       interface=org.gnome.Shell.SearchProvider2
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gnome/seahorse/Application{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gnome/seahorse/Application{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gnome/seahorse/Application{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.seahorse.Application{,.*}}"),
+  dbus send bus=session path=/org/gnome/seahorse/Application{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  @{exec_path} mr,
+
+  @{bin}/gpgconf  rpx,
+  @{bin}/gpg{,2}  rpx,
+  @{bin}/gpgsm    rpx,
+
+  @{open_path}    rpx -> child-open-help,
+
+  /etc/pki/trust/blocklist/ r,
+  /etc/gcrypt/hwf.deny r,
+
+  owner @{HOME}/@{XDG_SSH_DIR}/{,**} r,
+
+  owner @{PROC}/@{pid}/fd/ r,
+
+  include if exists <local/seahorse>
+}
+
+# vim:syntax=apparmor

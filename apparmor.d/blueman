@@ -1,0 +1,163 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2022 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/blueman-*
+@{att} = /att/blueman/
+profile blueman /{,usr/}bin/blueman-* flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/audio-client>
+  include <abstractions/bluetooth-control>
+  include <abstractions/bus/system/org.bluez.AgentManager1>
+  include <abstractions/bus/system/org.freedesktop.hostname1>
+  include <abstractions/dconf-write>
+  include <abstractions/desktop>
+  include <abstractions/fontconfig-cache-read>
+  include <abstractions/gvfs>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/python>
+  include <abstractions/thumbnails-cache-read>
+  include <abstractions/user-download-strict>
+
+  network inet stream,
+  network inet6 stream,
+  network netlink raw,
+  network bluetooth raw,
+
+  ptrace read peer=gjs,
+
+  #aa/dbus own bus=session name=org.blueman.Applet
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.blueman.Applet{,.*},
+  dbus receive bus=session path=/org/blueman/Applet{,/**}
+       interface=org.blueman.Applet{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/blueman/Applet{,/**}
+       interface=org.blueman.Applet{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/blueman/Applet{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/blueman/Applet{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/blueman/Applet{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.blueman.Applet{,.*}}"),
+  dbus send bus=session path=/org/blueman/Applet{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=session name=org.blueman.Manager
+  dbus bind bus=session name=org.blueman.Manager{,.*},
+  dbus receive bus=session path=/org/blueman/Manager{,/**}
+       interface=org.blueman.Manager{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/blueman/Manager{,/**}
+       interface=org.blueman.Manager{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/blueman/Manager{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/blueman/Manager{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/blueman/Manager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.blueman.Manager{,.*}}"),
+  dbus send bus=session path=/org/blueman/Manager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  #aa/dbus talk bus=system name=org.blueman.{m,M}echanism label=blueman-mechanism
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=blueman-mechanism),
+  # org.blueman.{m,M}echanism: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/blueman/{m,M}echanism{,/**}
+       interface=org.blueman.{m,M}echanism{,.*}
+       peer=(name="{@{busname},org.blueman.{m,M}echanism{,.*},org.freedesktop.DBus}", label=blueman-mechanism),
+  dbus send bus=system path=/org/blueman/{m,M}echanism{,/**}
+       interface=org.blueman.{m,M}echanism{,.*}
+       peer=(name="org.blueman.{m,M}echanism{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/blueman/{m,M}echanism{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.blueman.{m,M}echanism{,.*},org.freedesktop.DBus}", label=blueman-mechanism),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/blueman/{m,M}echanism{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.blueman.{m,M}echanism{,.*},org.freedesktop.DBus}", label=blueman-mechanism),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/blueman/{m,M}echanism{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.blueman.{m,M}echanism{,.*},org.freedesktop.DBus}", label=blueman-mechanism),
+  dbus receive bus=system path=/org/blueman/{m,M}echanism{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.blueman.{m,M}echanism{,.*},org.freedesktop.DBus}", label=blueman-mechanism),
+
+
+  dbus receive bus=system path=/org/bluez/agent/blueman
+       interface=org.bluez.Agent1
+       member=Release
+       peer=(name=@{busname}, label=bluetoothd),
+
+  @{exec_path} mrix,
+
+  @{sh_path}           rix,
+  @{open_path}         rix,
+
+  /usr/share/blueman/{,**} r,
+
+  /var/lib/blueman/network.state r,
+
+  owner @{HOME}/ r,
+  owner @{HOME}/bluetooth*/ r,
+  owner @{HOME}/bluetooth*/* rw,
+
+  owner @{user_cache_dirs}/blueman-tray-@{int} rw,
+  owner @{user_cache_dirs}/blueman-services-@{int} rw,
+  owner @{user_cache_dirs}/blueman-adapters-@{int} rw,
+  owner @{user_cache_dirs}/blueman-manager-@{int} rw,
+  owner @{user_cache_dirs}/blueman-applet-@{int} rw,
+
+  owner @{user_cache_dirs}/obexd/ rw,
+  owner @{user_cache_dirs}/obexd/* rw,
+
+        @{PROC}/@{pids}/cmdline r,
+  owner @{PROC}/@{pid}/cgroup r,
+  owner @{PROC}/@{pid}/fd/ r,
+  owner @{PROC}/@{pid}/mounts r,
+
+  /dev/dri/card@{int} rw,
+  /dev/rfkill r,
+  /dev/shm/ r,
+  /dev/tty rw,
+
+  include if exists <local/blueman>
+}
+
+# vim:syntax=apparmor

@@ -1,0 +1,40 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/plasma-browser-integration-host
+@{att} = ""
+profile plasma-browser-integration-host /{,usr/}bin/plasma-browser-integration-host flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/bus-session>
+  include <abstractions/graphics>
+  include <abstractions/kde-strict>
+  include <abstractions/nameservice-strict>
+
+  capability sys_ptrace,
+
+  ptrace (read) peer={chromium,brave,chrome,opera,firefox},
+
+  @{exec_path} mr,
+
+  /usr/share/kservices{5,6}/{,**} r,
+
+  /etc/xdg/taskmanagerrulesrc r,
+
+  owner @{user_share_dirs}/kservices{5,6}/ r,
+  owner @{user_share_dirs}/kservices{5,6}/ServiceMenus/ r,
+
+  owner @{PROC}/@{pid}/cmdline r,
+  owner @{PROC}/@{pid}/stat r,
+
+  owner /tmp/#@{int} rw,
+  owner @{tmp}/plasma-browser-integration_artwork_@{rand6}.jpg rwl -> /tmp/#@{int},
+
+  include if exists <local/plasma-browser-integration-host>
+}
+
+# vim:syntax=apparmor

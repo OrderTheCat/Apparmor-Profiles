@@ -1,0 +1,38 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 odomingao
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/hyprlock
+@{att} = /att/hyprlock/
+profile hyprlock /{,usr/}bin/hyprlock flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/authentication>
+  include <abstractions/fonts>
+  include <abstractions/graphics>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/wayland-strict>
+
+  network netlink raw,
+
+  @{exec_path} mr,
+
+  @{etc_ro}/security/faillock.conf r,
+  /etc/shells r,
+
+  owner @{HOME}/@{XDG_WALLPAPERS_DIR}/** r,
+  owner @{user_pictures_dirs}/** r,
+
+  owner @{user_config_dirs}/hypr/hyprlock.conf r,
+
+  owner @{run}/faillock/@{user} rwk,
+
+  owner /dev/tty@{u8} rw,
+
+  include if exists <local/hyprlock>
+}
+
+# vim:syntax=apparmor

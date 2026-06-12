@@ -1,0 +1,59 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/cups/notifier/dbus
+@{att} = /att/cups-notifier-dbus/
+profile cups-notifier-dbus /{,usr/}lib{,exec,32,64}/cups/notifier/dbus flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-session>
+  include <abstractions/bus-system>
+  include <abstractions/cups-client>
+  include <abstractions/attached/nameservice-strict>
+
+  signal (receive) set=(term) peer=cupsd,
+
+  #aa/dbus own bus=system name=org.cups.cupsd.Notifier
+  include <abstractions/bus/system/own>
+  dbus bind bus=system name=org.cups.cupsd.Notifier{,.*},
+  dbus receive bus=system path=/org/cups/cupsd/Notifier{,/**}
+       interface=org.cups.cupsd.Notifier{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=system path=/org/cups/cupsd/Notifier{,/**}
+       interface=org.cups.cupsd.Notifier{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=system path=/org/cups/cupsd/Notifier{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=system path=/org/cups/cupsd/Notifier{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=system path=/org/cups/cupsd/Notifier{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.cups.cupsd.Notifier{,.*}}"),
+  dbus send bus=system path=/org/cups/cupsd/Notifier{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  @{exec_path} mr,
+
+  owner /var/spool/cups/tmp/cups-dbus-notifier-lockfile rw,
+
+  owner @{tmp}/cups-dbus-notifier-lockfile rwk,
+
+  include if exists <local/cups-notifier-dbus>
+}
+
+# vim:syntax=apparmor

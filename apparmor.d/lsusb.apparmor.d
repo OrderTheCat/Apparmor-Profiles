@@ -1,0 +1,45 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2019-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/lsusb @{bin}/lsusb.py
+@{att} = ""
+profile lsusb /{{,usr/}bin/lsusb,{,usr/}bin/lsusb.py} flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/consoles>
+  include <abstractions/devices-usb-read>
+
+  capability net_admin,
+  capability sys_admin,
+
+  network netlink raw,
+
+  @{exec_path} mr,
+
+  /etc/udev/hwdb.bin r,
+
+  / r,
+
+  @{sys}/devices/**/usb@{int}/** r,
+
+  @{sys}/devices/**/usb@{int}/{,**/}bAlternateSetting r,
+  @{sys}/devices/**/usb@{int}/{,**/}bDeviceClass r,
+  @{sys}/devices/**/usb@{int}/{,**/}bInterfaceClass r,
+  @{sys}/devices/**/usb@{int}/{,**/}bInterfaceProtocol r,
+  @{sys}/devices/**/usb@{int}/{,**/}bInterfaceSubClass r,
+  @{sys}/devices/**/usb@{int}/{,**/}bNumEndpoints r,
+  @{sys}/devices/**/usb@{int}/{,**/}maxchild r,
+  @{sys}/devices/**/usb@{int}/{,**/}rx_lanes r,
+  @{sys}/devices/**/usb@{int}/{,**/}tx_lanes r,
+
+  /dev/bus/usb/@{d}@{d}@{d}/@{d}@{d}@{d} wk,
+
+  include if exists <local/lsusb>
+}
+
+# vim:syntax=apparmor

@@ -1,0 +1,30 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/akonadi_birthdays_resource
+@{att} = ""
+profile akonadi_birthdays_resource /{,usr/}bin/akonadi_birthdays_resource flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/graphics>
+  include <abstractions/kde-strict>
+  include <abstractions/nameservice-strict>
+
+  @{exec_path} mr,
+
+  /usr/share/akonadi/plugins/{,**} r,
+
+  owner @{user_config_dirs}/akonadi_birthdays_resourcerc r,
+  owner @{user_config_dirs}/akonadi/ rw,
+  owner @{user_config_dirs}/akonadi/** rwlk -> @{user_config_dirs}/akonadi/**,
+
+  /dev/tty r,
+
+  include if exists <local/akonadi_birthdays_resource>
+}
+
+# vim:syntax=apparmor

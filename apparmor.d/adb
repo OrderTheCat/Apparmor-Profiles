@@ -1,0 +1,40 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2022 Mikhail Morfikov
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path}  = @{bin}/adb
+@{exec_path} += @{lib}/android-sdk/platform-tools/adb
+@{att} = /att/adb/
+profile adb /{{,usr/}bin/adb,{,usr/}lib{,exec,32,64}/android-sdk/platform-tools/adb,{,usr/}lib{,exec,32,64}/android-sdk/platform-tools/adb} flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+  include <abstractions/devices-usb>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/user-download-strict>
+
+  network inet stream,
+  network inet6 stream,
+  network netlink raw,
+
+  signal (receive) set=(kill) peer=scrcpy,
+
+  @{exec_path} mrix,
+
+  /usr/share/scrcpy/scrcpy-server r,
+
+  owner @{tmp}/adb.@{int}.log rw,
+
+  owner @{HOME}/.android/ rw,
+  owner @{HOME}/.android/adb.@{int} rw,
+  owner @{HOME}/.android/adbkey rw,
+  owner @{HOME}/.android/adbkey.pub rw,
+
+  include if exists <local/adb>
+}
+
+# vim:syntax=apparmor

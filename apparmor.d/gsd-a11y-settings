@@ -1,0 +1,74 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/gsd-a11y-settings
+@{att} = /att/gsd-a11y-settings/
+profile gsd-a11y-settings /{,usr/}lib{,exec,32,64}/gsd-a11y-settings flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-session>
+  include <abstractions/bus-system>
+  include <abstractions/attached/consoles>
+  include <abstractions/dconf-write>
+  include <abstractions/gschemas>
+  include <abstractions/session-manager>
+
+  signal (receive) set=(term, hup) peer=gdm*,
+
+  #aa/dbus own bus=session name=org.gnome.SettingsDaemon.A11ySettings
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gnome.SettingsDaemon.A11ySettings{,.*},
+  dbus receive bus=session path=/org/gnome/SettingsDaemon/A11ySettings{,/**}
+       interface=org.gnome.SettingsDaemon.A11ySettings{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/SettingsDaemon/A11ySettings{,/**}
+       interface=org.gnome.SettingsDaemon.A11ySettings{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gnome/SettingsDaemon/A11ySettings{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gnome/SettingsDaemon/A11ySettings{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gnome/SettingsDaemon/A11ySettings{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.SettingsDaemon.A11ySettings{,.*}}"),
+  dbus send bus=session path=/org/gnome/SettingsDaemon/A11ySettings{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  dbus send bus=session path=/org/freedesktop/systemd1
+       interface=org.freedesktop.systemd1.Manager
+       member=DisableUnitFilesWithFlags
+       peer=(name=org.freedesktop.systemd1, label="@{p_systemd_user}"),
+  dbus send bus=session path=/org/freedesktop/systemd1
+       interface=org.freedesktop.systemd1.Manager
+       member=StopUnit
+       peer=(name=org.freedesktop.systemd1, label="@{p_systemd_user}"),
+
+  dbus receive bus=session
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name=@{busname}, label="{gnome-shell,gnome-extension}"),
+
+  @{exec_path} mr,
+
+  @{gdm_config_dirs}/dconf/user r,
+  @{GDM_HOME}/greeter-dconf-defaults r,
+
+  include if exists <local/gsd-a11y-settings>
+}
+
+# vim:syntax=apparmor

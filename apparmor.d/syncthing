@@ -1,0 +1,50 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2020-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/syncthing
+@{att} = /att/syncthing/
+profile syncthing /{,usr/}bin/syncthing flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+  include <abstractions/mime>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/sqlite>
+  include <abstractions/ssl_certs>
+
+  network inet dgram,
+  network inet6 dgram,
+  network inet stream,
+  network inet6 stream,
+  network netlink raw,
+
+  @{exec_path} mrix,
+
+  @{open_path}     rpx -> child-open,
+  @{bin}/ip        rix,
+
+  @{HOME}/ r,
+  @{HOME}/** rwk,
+
+  /home/ r,
+  @{user_sync_dirs}/{,**} rw,
+
+        @{PROC}/@{pids}/net/route r,
+        @{PROC}/bus/pci/devices r,
+        @{PROC}/modules r,
+        @{PROC}/sys/kernel/osrelease r,
+        @{PROC}/sys/net/core/somaxconn r,
+  owner @{PROC}/@{pid}/cgroup r,
+  owner @{PROC}/@{pid}/mountinfo r,
+  owner @{PROC}/@{pid}/stat r,
+  owner @{PROC}/@{pid}/statm r,
+
+  include if exists <local/syncthing>
+}
+
+# vim:syntax=apparmor

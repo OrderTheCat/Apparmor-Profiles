@@ -1,0 +1,139 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2020-2022 Mikhail Morfikov
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/{,accountsservice/}accounts-daemon
+@{att} = /att/accounts-daemon/
+profile accounts-daemon /{,usr/}lib{,exec,32,64}/{,accountsservice/}accounts-daemon flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-system>
+  include <abstractions/bus/system/org.freedesktop.PolicyKit1>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/wutmp>
+
+  capability dac_read_search,
+  capability setgid,
+  capability setuid,
+  capability sys_nice,
+  capability sys_ptrace,
+
+  ptrace read peer=unconfined,
+
+  #aa/dbus own bus=system name=org.freedesktop.Accounts
+  include <abstractions/bus/system/own>
+  dbus bind bus=system name=org.freedesktop.Accounts{,.*},
+  dbus receive bus=system path=/org/freedesktop/Accounts{,/**}
+       interface=org.freedesktop.Accounts{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=system path=/org/freedesktop/Accounts{,/**}
+       interface=org.freedesktop.Accounts{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=system path=/org/freedesktop/Accounts{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=system path=/org/freedesktop/Accounts{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=system path=/org/freedesktop/Accounts{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.Accounts{,.*}}"),
+  dbus send bus=system path=/org/freedesktop/Accounts{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus talk bus=system name=org.freedesktop.home1 label=systemd-homed
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=systemd-homed),
+  # org.freedesktop.home1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/home1{,/**}
+       interface=org.freedesktop.home1{,.*}
+       peer=(name="{@{busname},org.freedesktop.home1{,.*},org.freedesktop.DBus}", label=systemd-homed),
+  dbus send bus=system path=/org/freedesktop/home1{,/**}
+       interface=org.freedesktop.home1{,.*}
+       peer=(name="org.freedesktop.home1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/home1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.home1{,.*},org.freedesktop.DBus}", label=systemd-homed),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/home1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.home1{,.*},org.freedesktop.DBus}", label=systemd-homed),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/home1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.home1{,.*},org.freedesktop.DBus}", label=systemd-homed),
+  dbus receive bus=system path=/org/freedesktop/home1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.home1{,.*},org.freedesktop.DBus}", label=systemd-homed),
+
+
+  @{exec_path} mr,
+
+  @{sbin}/adduser    rpx,
+  @{bin}/cat         rix,
+  @{bin}/chage       rpx,
+  @{bin}/passwd      rpx,
+  @{sbin}/chpasswd   rpx,
+  @{sbin}/userdel    rpx,
+  @{sbin}/usermod    rpx,
+  @{bin}/locale     rpux,
+
+  /usr/share/language-tools/language-validate   rpx,
+  /usr/share/language-tools/set-language-helper rpux,
+  /usr/share/language-tools/save-to-pam-env rpux,
+
+  /usr/share/accountsservice/{,**} r,
+  /usr/share/dbus-1/interfaces/*.xml r,
+
+  @{etc_rw}/tcb/{,**} r,
+  /etc/default/locale r,
+  /etc/gdm{3,}/ r,
+  /etc/gdm{3,}/custom.conf{,.@{rand6}} rw,
+  /etc/gdm{3,}/daemon.conf{,.@{rand6}} rw,
+  /etc/lightdm/lightdm.conf r,
+  /etc/machine-id r,
+  /etc/shadow r,
+  /etc/shells r,
+  /etc/sysconfig/displaymanager r,
+
+  /var/log/wtmp r,
+
+  owner /var/lib/AccountsService/ r,
+  owner /var/lib/AccountsService/** rw,
+
+        @{HOME}/ r,
+  owner @{HOME}/.pam_environment r,
+
+  owner @{tmp}/gnome-control-center-user-icon-@{rand6} rw,
+
+  @{att}@{run}/systemd/userdb/io.systemd.Machine rw,
+
+        @{PROC}/@{pid}/cmdline r,
+        @{PROC}/@{pid}/loginuid r,
+        @{PROC}/1/environ r,
+        @{PROC}/cmdline r,
+        @{PROC}/sys/kernel/osrelease r,
+  owner @{PROC}/@{pid}/fd/ r,
+  owner @{PROC}/@{pid}/loginuid rw,
+
+  include if exists <local/accounts-daemon>
+}
+
+# vim:syntax=apparmor

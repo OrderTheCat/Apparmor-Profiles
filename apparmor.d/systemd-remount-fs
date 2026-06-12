@@ -1,0 +1,46 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/systemd/systemd-remount-fs
+@{att} = /att/systemd-remount-fs/
+profile systemd-remount-fs /{,usr/}lib{,exec,32,64}/systemd/systemd-remount-fs flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/common/systemd>
+
+  capability net_admin,
+  capability sys_admin,
+  capability sys_resource,
+
+  mount options=(rw, remount) -> /,
+  mount options=(rw, remount) -> @{PROC}/,
+
+  ptrace read peer=@{p_systemd},
+
+  @{exec_path} mr,
+
+  @{bin}/mount rix,
+
+  @{etc_ro}/blkid.conf r,
+  @{etc_ro}/blkid.conf.d/{,**} r,
+  /etc/fstab r,
+
+  @{run}/host/container-manager r,
+  @{run}/mount/utab rw,
+  @{run}/mount/utab.* rwk,
+
+  @{sys}/devices/virtual/block/dm-@{int}/dm/name r,
+
+  @{PROC}/ r,
+  @{PROC}/1/cmdline r,
+  @{PROC}/sys/fs/nr_open r,
+
+  include if exists <local/systemd-remount-fs>
+}
+
+# vim:syntax=apparmor

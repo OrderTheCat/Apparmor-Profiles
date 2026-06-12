@@ -1,0 +1,70 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2018-2021 Mikhail Morfikov
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+# See <abstractions/fontconfig-cache> for documentation.
+
+  abi <abi/4.0>,
+
+  include <abstractions/fontconfig-cache>
+
+        /var/cache/fontconfig/ w,
+  owner /var/cache/fontconfig/CACHEDIR.TAG w,
+  owner /var/cache/fontconfig/CACHEDIR.TAG.LCK wl,
+  owner /var/cache/fontconfig/CACHEDIR.TAG.NEW w,
+  owner /var/cache/fontconfig/CACHEDIR.TAG.TMP-@{rand6} wl,
+  owner /var/cache/fontconfig/@{uuid}-le{32,64}{,d4}.cache-@{d} wl,
+  owner /var/cache/fontconfig/@{uuid}-le{32,64}{,d4}.cache-@{d}.LCK wl,
+  owner /var/cache/fontconfig/@{uuid}-le{32,64}{,d4}.cache-@{d}.NEW w,
+  owner /var/cache/fontconfig/@{uuid}-le{32,64}{,d4}.cache-@{d}.TMP-@{rand6} wl,
+  owner /var/cache/fontconfig/@{hex32}-le{32,64}{,d4}.cache-@{d} wl,
+  owner /var/cache/fontconfig/@{hex32}-le{32,64}{,d4}.cache-@{d}.LCK wl,
+  owner /var/cache/fontconfig/@{hex32}-le{32,64}{,d4}.cache-@{d}.NEW w,
+  owner /var/cache/fontconfig/@{hex32}-le{32,64}{,d4}.cache-@{d}.TMP-@{rand6} wl,
+
+  owner @{desktop_cache_dirs}/fontconfig/ w,
+  owner @{desktop_cache_dirs}/fontconfig/@{hex32}-le{32,64}{,d4}.cache-@{d} wl,
+  owner @{desktop_cache_dirs}/fontconfig/@{hex32}-le{32,64}{,d4}.cache-@{d}.LCK wl,
+  owner @{desktop_cache_dirs}/fontconfig/@{hex32}-le{32,64}{,d4}.cache-@{d}.NEW w,
+  owner @{desktop_cache_dirs}/fontconfig/@{hex32}-le{32,64}{,d4}.cache-@{d}.TMP-@{rand6} wl,
+  owner @{desktop_cache_dirs}/fontconfig/@{uuid}-le{32,64}{,d4}.cache-@{d}.NEW w,
+  owner @{desktop_cache_dirs}/fontconfig/@{uuid}-le{32,64}{,d4}.cache-@{d}.TMP-@{rand6} wl,
+  owner @{desktop_cache_dirs}/fontconfig/@{uuid}-le{32,64}{,d4}.cache-@{d} wl,
+  owner @{desktop_cache_dirs}/fontconfig/@{uuid}-le{32,64}{,d4}.cache-@{d}.LCK wl,
+  owner @{desktop_cache_dirs}/fontconfig/CACHEDIR.TAG w,
+  owner @{desktop_cache_dirs}/fontconfig/CACHEDIR.TAG.LCK wl,
+  owner @{desktop_cache_dirs}/fontconfig/CACHEDIR.TAG.NEW w,
+  owner @{desktop_cache_dirs}/fontconfig/CACHEDIR.TAG.TMP-@{rand6} wl,
+
+  owner @{HOME}/.fontconfig/ w,
+  owner @{HOME}/.fontconfig/fontconfig/@{hex32}-le{32,64}{,d4}.cache-@{d} wl,
+  owner @{HOME}/.fontconfig/@{hex32}-le{32,64}{,d4}.cache-@{d}.LCK wl,
+  owner @{HOME}/.fontconfig/@{hex32}-le{32,64}{,d4}.cache-@{d}.NEW w,
+  owner @{HOME}/.fontconfig/@{hex32}-le{32,64}{,d4}.cache-@{d}.TMP-@{rand6} w,
+  owner @{HOME}/.fontconfig/@{uuid}-le{32,64}{,d4}.cache-@{d}.NEW w,
+  owner @{HOME}/.fontconfig/@{uuid}-le{32,64}{,d4}.cache-@{d}.TMP-@{rand6} w,
+  owner @{HOME}/.fontconfig/@{uuid}-le{32,64}{,d4}.cache-@{d} wl,
+  owner @{HOME}/.fontconfig/@{uuid}-le{32,64}{,d4}.cache-@{d}.LCK wl,
+  owner @{HOME}/.fontconfig/CACHEDIR.TAG w,
+  owner @{HOME}/.fontconfig/CACHEDIR.TAG.LCK wl,
+  owner @{HOME}/.fontconfig/CACHEDIR.TAG.NEW w,
+  owner @{HOME}/.fontconfig/CACHEDIR.TAG.TMP-@{rand6} wl,
+
+  owner @{user_cache_dirs}/fontconfig/ w,
+  owner @{user_cache_dirs}/fontconfig/@{hex32}-le{32,64}{,d4}.cache-@{d} wlk,
+  owner @{user_cache_dirs}/fontconfig/@{hex32}-le{32,64}{,d4}.cache-@{d}.LCK wl,
+  owner @{user_cache_dirs}/fontconfig/@{hex32}-le{32,64}{,d4}.cache-@{d}.NEW w,
+  owner @{user_cache_dirs}/fontconfig/@{hex32}-le{32,64}{,d4}.cache-@{d}.TMP-@{rand6} wl,
+  owner @{user_cache_dirs}/fontconfig/@{uuid}-le{32,64}{,d4}.cache-@{d}.NEW w,
+  owner @{user_cache_dirs}/fontconfig/@{uuid}-le{32,64}{,d4}.cache-@{d}.TMP-@{rand6} wl,
+  owner @{user_cache_dirs}/fontconfig/@{uuid}-le{32,64}{,d4}.cache-@{d} wl,
+  owner @{user_cache_dirs}/fontconfig/@{uuid}-le{32,64}{,d4}.cache-@{d}.LCK wl,
+  owner @{user_cache_dirs}/fontconfig/CACHEDIR.TAG w,
+  owner @{user_cache_dirs}/fontconfig/CACHEDIR.TAG.LCK wl,
+  owner @{user_cache_dirs}/fontconfig/CACHEDIR.TAG.NEW w,
+  owner @{user_cache_dirs}/fontconfig/CACHEDIR.TAG.TMP-@{rand6} wl,
+
+  include if exists <abstractions/fontconfig-cache-write.d>
+
+# vim:syntax=apparmor

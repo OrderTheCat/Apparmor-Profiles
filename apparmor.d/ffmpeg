@@ -1,0 +1,43 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2017-2021 Mikhail Morfikov
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/ffmpeg
+@{att} = ""
+profile ffmpeg /{,usr/}bin/ffmpeg flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/audio-client>
+  include <abstractions/consoles>
+  include <abstractions/graphics>
+  include <abstractions/nameservice-strict>
+  include <abstractions/ssl_certs>
+  include <abstractions/user-download-strict>
+
+  network inet dgram,
+  network inet6 dgram,
+  network inet stream,
+  network inet6 stream,
+
+  @{exec_path}  mr,
+
+  /etc/machine-id r,
+  /var/lib/dbus/machine-id r,
+
+  owner @{HOME}/.Xauthority r,
+  owner @{HOME}/.spotdl/** rw, # For spotdl
+
+  owner @{user_music_dirs}/** rw,
+  owner @{user_videos_dirs}/** rw,
+
+  owner @{tmp}/*.@{image_ext} rw,  # To generate thumbnails in some apps
+  owner @{tmp}/vidcutter/** rw, # TMP files for apps using ffmpeg
+
+  include if exists <local/ffmpeg>
+}
+
+# vim:syntax=apparmor

@@ -1,0 +1,38 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2020-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/systemd/systemd-rfkill
+@{att} = /att/systemd-rfkill/
+profile systemd-rfkill /{,usr/}lib{,exec,32,64}/systemd/systemd-rfkill flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/common/systemd>
+
+  capability net_admin,
+  capability sys_admin,
+  capability sys_ptrace,
+
+  network netlink raw,
+
+  ptrace read peer=@{p_systemd},
+
+  @{exec_path} mr,
+
+  /var/lib/systemd/rfkill/* rw,
+
+  @{run}/udev/data/+rfkill:* r,           # Kill switch for wireless devices (Wi-Fi, Bluetooth, NFC) to save power
+
+  @{sys}/devices/**/rfkill@{int}/{uevent,name} r,
+  @{sys}/devices/@{pci}/usb@{int}/** r,
+
+  /dev/rfkill rw,
+
+  include if exists <local/systemd-rfkill>
+}
+
+# vim:syntax=apparmor

@@ -1,0 +1,51 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/nm-priv-helper
+@{att} = ""
+profile nm-priv-helper /{,usr/}bin/nm-priv-helper flags=(complain) {
+  include <abstractions/base-strict>
+
+  capability dac_override,
+
+  #aa/dbus own bus=system name=org.freedesktop.nm_priv_helper
+  include <abstractions/bus/system/own>
+  dbus bind bus=system name=org.freedesktop.nm_priv_helper{,.*},
+  dbus receive bus=system path=/org/freedesktop/nm_priv_helper{,/**}
+       interface=org.freedesktop.nm_priv_helper{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=system path=/org/freedesktop/nm_priv_helper{,/**}
+       interface=org.freedesktop.nm_priv_helper{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=system path=/org/freedesktop/nm_priv_helper{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=system path=/org/freedesktop/nm_priv_helper{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=system path=/org/freedesktop/nm_priv_helper{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.nm_priv_helper{,.*}}"),
+  dbus send bus=system path=/org/freedesktop/nm_priv_helper{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  @{exec_path} mr,
+
+  include if exists <local/nm-priv-helper>
+}
+
+# vim:syntax=apparmor

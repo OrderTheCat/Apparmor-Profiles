@@ -1,0 +1,50 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{name} = deltachat-desktop
+@{domain} = org.chromium.Chromium
+@{lib_dirs} = @{lib}/deltachat-desktop @{lib}/deltachat /opt/DeltaChat/
+@{config_dirs} = @{user_config_dirs}/DeltaChat
+@{cache_dirs} = @{user_cache_dirs}/DeltaChat
+
+@{exec_path} = @{bin}/deltachat-desktop @{lib_dirs}/deltachat-desktop
+@{att} = ""
+profile deltachat-desktop /{{,usr/}bin/deltachat-desktop,{,usr/}lib{,exec,32,64}/deltachat-desktop/deltachat-desktop,{,usr/}lib{,exec,32,64}/deltachat/deltachat-desktop,opt/DeltaChat/deltachat-desktop} flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/consoles>
+  include <abstractions/dconf-write>
+  include <abstractions/desktop>
+  include <abstractions/nameservice-strict>
+  include <abstractions/ssl_certs>
+  include <abstractions/user-download-strict>
+
+  network inet dgram,
+  network inet6 dgram,
+  network inet stream,
+  network inet6 stream,
+  network netlink raw,
+
+  @{exec_path} mrix,
+
+  @{lib_dirs}/chrome-sandbox rpx,
+
+  @{bin}/xdg-settings    rpx,
+  @{open_path} rpx -> child-open-browsers,
+
+  owner @{tmp}/@{hex}/ rw,
+  owner @{tmp}/@{hex}/db.sqlite rwk,
+  owner @{tmp}/@{hex}/db.sqlite-blobs/ rw,
+  owner @{tmp}/@{hex}/db.sqlite-journal rw,
+
+  /dev/ r,
+
+  include if exists <local/deltachat-desktop>
+}
+
+# vim:syntax=apparmor

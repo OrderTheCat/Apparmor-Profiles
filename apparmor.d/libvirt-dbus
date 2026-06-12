@@ -1,0 +1,107 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{sbin}/libvirt-dbus
+@{att} = /att/libvirt-dbus/
+profile libvirt-dbus /{,usr/}{,s}bin/libvirt-dbus flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-session>
+  include <abstractions/bus-system>
+  include <abstractions/attached/nameservice-strict>
+
+  #aa/dbus own bus=session name=org.libvirt
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.libvirt{,.*},
+  dbus receive bus=session path=/org/libvirt{,/**}
+       interface=org.libvirt{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/libvirt{,/**}
+       interface=org.libvirt{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/libvirt{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/libvirt{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/libvirt{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.libvirt{,.*}}"),
+  dbus send bus=session path=/org/libvirt{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=system name=org.libvirt
+  include <abstractions/bus/system/own>
+  dbus bind bus=system name=org.libvirt{,.*},
+  dbus receive bus=system path=/org/libvirt{,/**}
+       interface=org.libvirt{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=system path=/org/libvirt{,/**}
+       interface=org.libvirt{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=system path=/org/libvirt{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=system path=/org/libvirt{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=system path=/org/libvirt{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.libvirt{,.*}}"),
+  dbus send bus=system path=/org/libvirt{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  dbus receive bus=session
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name=@{busname}, label="{gnome-shell,gnome-extension}"),
+
+  @{exec_path} mr,
+
+  @{sbin}/libvirtd  rpx,
+  @{bin}/virtqemud  rpx,
+
+  /usr/share/dbus-1/interfaces/org.libvirt.*.xml r,
+
+  owner @{user_cache_dirs}/libvirt/libvirtd.lock rwk,
+
+  @{run}/libvirt/libvirt-sock rw,
+
+        @{run}/user/@{uid}/libvirt/ rw,
+        @{run}/user/@{uid}/libvirt/libvirtd.lock rwk,
+        @{run}/user/@{uid}/libvirt/virtqemud.lock rwk,
+  owner @{run}/user/@{uid}/libvirt/libvirt-sock rw,
+  owner @{run}/user/@{uid}/libvirt/virtqemud-sock rw,
+
+  @{sys}/devices/system/node/ r,
+  @{sys}/devices/system/node/node*/meminfo r,
+  @{sys}/kernel/iommu_groups/ r,
+
+  owner @{PROC}/@{pid}/fd/ r,
+
+  include if exists <local/libvirt-dbus>
+}
+
+# vim:syntax=apparmor

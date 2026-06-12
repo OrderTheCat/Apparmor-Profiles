@@ -1,0 +1,28 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 odomingao
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/hyprpicker
+@{att} = ""
+profile hyprpicker /{,usr/}bin/hyprpicker flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/icons>
+
+  @{exec_path} mr,
+  @{bin}/wl-copy px,
+
+  owner @{run}/user/@{uid}/.hyprpicker* rw,
+  owner /dev/shm/wlroots-@{rand6} r,
+  owner /dev/shm/@{uuid} r,
+
+  owner /dev/tty@{u8} rw,
+
+  include if exists <local/hyprpicker>
+}
+
+# vim:syntax=apparmor
+

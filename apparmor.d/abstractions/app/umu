@@ -1,0 +1,54 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+# LOGPROF-SUGGEST: no
+# NEEDS-VARIABLE: att
+# NEEDS-VARIABLE: steam_share_dirs
+# NEEDS-VARIABLE: runtime_dirs
+
+  abi <abi/4.0>,
+
+  include <abstractions/common/pressure-vessel>
+  include <abstractions/deny-sensitive-home>
+
+  signal (send receive) peer=umu-bwrap,
+  signal (send receive) peer=umu-bwrap//&umu-game,
+  signal (send receive) peer=umu-game,
+  signal (send receive) peer=umu-run,
+
+  unix type=seqpacket peer=(label=umu-bwrap),
+  unix type=stream    peer=(label=umu-bwrap),
+  unix type=stream    peer=(label=umu-game),
+
+  ptrace (read trace) peer=umu-bwrap,
+  ptrace (read trace) peer=umu-bwrap//&umu-game,
+  ptrace (read trace) peer=umu-game,
+
+  @{runtime_dirs}/umu-shim rix,
+  @{share_dirs}/umu-shim rix,
+
+  @{wineprefix_dirs}/ r,
+  @{wineprefix_dirs}/** mrix,
+  @{user_config_dirs}/heroic/tools/proton/ r,
+  @{user_config_dirs}/heroic/tools/proton/*/ r,
+  @{user_config_dirs}/heroic/tools/proton/*/** mrix,
+
+  # file_inherit
+        @{user_share_dirs}/umu/steamrt@{int}/VERSIONS.txt r,
+        @{user_share_dirs}/umu/steamrt@{int}/var/tmp-@{rand6}/usr/.ref rw,
+  @{att}@{user_share_dirs}/umu/steamrt@{int}/var/tmp-@{rand6}/usr/.ref rw,
+
+  owner @{user_cache_dirs}/umu-protonfixes/protonfixes_test.log w,
+
+  owner @{att}@{wineprefix_dirs}/ rw,
+  owner @{att}@{wineprefix_dirs}/** rwk,
+  owner @{wineprefix_dirs}/ rw,
+  owner @{wineprefix_dirs}/** rwk,
+
+  owner @{tmp}/umu_crashreports/{,**} rw,
+
+  owner @{PROC}/@{pid}/uid_map r,
+
+  include if exists <abstractions/app/umu.d>
+
+# vim:syntax=apparmor

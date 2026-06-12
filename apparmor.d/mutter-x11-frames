@@ -1,0 +1,34 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/mutter-x11-frames
+@{att} = /att/mutter-x11-frames/
+profile mutter-x11-frames /{,usr/}lib{,exec,32,64}/mutter-x11-frames flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+  include <abstractions/dconf-write>
+  include <abstractions/fontconfig-cache-write>
+  include <abstractions/gnome-strict>
+  include <abstractions/graphics>
+  include <abstractions/attached/nameservice-strict>
+
+  signal (receive) set=(hup term) peer=gdm{,-session-worker},
+
+  @{exec_path} mr,
+
+  owner @{gdm_cache_dirs}/fontconfig/ rw,
+  owner @{gdm_cache_dirs}/fontconfig/@{hex32}-*.cache-?{,.NEW,.LCK,.TMP-@{rand6}} rwl,
+
+  @{sys}/devices/@{pci}/boot_vga r,
+
+  owner @{PROC}/@{pid}/cmdline r,
+
+  include if exists <local/mutter-x11-frames>
+}
+
+# vim:syntax=apparmor

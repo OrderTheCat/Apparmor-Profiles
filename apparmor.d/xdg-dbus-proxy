@@ -1,0 +1,56 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/xdg-dbus-proxy
+@{att} = /att/xdg-dbus-proxy/
+profile xdg-dbus-proxy /{,usr/}bin/xdg-dbus-proxy flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/accessibility>
+  include <abstractions/bus-session>
+  include <abstractions/bus-system>
+  include <abstractions/bus/system/org.freedesktop.Avahi.Server>
+  include <abstractions/attached/consoles>
+  include <abstractions/network-manager-observe>
+  include <abstractions/sys/hwmon-temp>
+  include <abstractions/user-download-strict>
+
+  network unix stream,
+
+  unix (send receive) type=seqpacket peer=(label=fapp),
+  unix (send receive) type=seqpacket peer=(label=fbwrap),
+
+  signal receive peer=flatpak-portal,
+
+  # By design xdg-dbus-proxy proxies and filters dbus communication from flatpak
+  # apps to the system. Thus, it can manage the full system and session buses.
+  dbus bus=session,
+  dbus bus=system,
+
+  @{exec_path} mr,
+
+  owner @{att}@{HOME}/.var/app/** r,
+  owner @{att}@{HOME}/.var/app/*/.local/share/*/logs/* rw,
+  owner @{att}@{HOME}/.var/app/*/.local/share/*/**/usr/.ref rw,
+
+        @{att}@{run}/systemd/inhibit/@{int}.ref rw,
+  owner @{att}@{run}/user/@{uid}/at-spi/bus rw,
+  owner @{att}@{run}/user/@{uid}/bus rw,
+
+  owner @{run}/firejail/dbus/@{int}/@{int}-{system,user} rw,
+  owner @{run}/flatpak/doc/** r,
+  owner @{run}/user/@{uid}/.dbus-proxy/{system,session,a11y}-bus-proxy-@{rand6} rw,
+  owner @{run}/user/@{uid}/webkitgtk/a11y-proxy-@{rand6} rw,
+  owner @{run}/user/@{uid}/webkitgtk/bus-proxy-@{rand6} rw,
+  owner @{run}/user/@{uid}/webkitgtk/dbus-proxy-@{rand6} rw,
+
+  /dev/dri/card@{int} rw,
+
+  include if exists <local/xdg-dbus-proxy>
+}
+
+# vim:syntax=apparmor

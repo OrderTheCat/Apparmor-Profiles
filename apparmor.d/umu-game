@@ -1,0 +1,26 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{share_dirs} = @{user_share_dirs}/umu
+@{cache_dirs} = @{user_cache_dirs}/umu
+@{runtime_dirs} = @{share_dirs}/steamrt@{int}/
+@{wineprefix_dirs} = @{HOME}/Games/umu/*/ @{HOME}/Games/Heroic/*/ @{HOME}/Games/steam/*/
+@{appid} = X
+
+@{exec_path} = @{lib}/pressure-vessel/from-host/libexec/steam-runtime-tools-@{int}/pv-adverb
+@{att} = /att/umu-game/
+profile umu-game flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+  include <abstractions/attached/base>
+  include <abstractions/app/umu>
+
+  @{exec_path} mr,
+
+  include if exists <local/umu-game>
+}
+
+# vim:syntax=apparmor

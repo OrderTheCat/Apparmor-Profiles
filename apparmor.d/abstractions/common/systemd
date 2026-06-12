@@ -1,0 +1,30 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2019-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+# !!! warning
+#
+#     This abstraction should only be used by profiles in the systemd software suite.
+#
+
+  abi <abi/4.0>,
+
+  / r,
+
+  @{sys}/fs/cgroup/system.slice/@{profile_name}.service/ r,
+  @{sys}/fs/cgroup/system.slice/@{profile_name}.service/memory.pressure rw,
+
+        @{PROC}/1/cgroup r,
+        @{PROC}/1/environ r,
+        @{PROC}/1/sched r,
+        @{PROC}/cmdline r,
+        @{PROC}/sys/kernel/osrelease r,
+        @{PROC}/sys/kernel/random/boot_id r,
+  owner @{PROC}/@{pid}/stat r,
+
+  /dev/kmsg w,
+
+  include if exists <abstractions/common/systemd.d>
+
+# vim:syntax=apparmor

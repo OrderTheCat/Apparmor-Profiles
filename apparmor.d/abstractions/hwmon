@@ -1,0 +1,23 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+# hwmon nodes are written in accordance with https://www.kernel.org/doc/Documentation/hwmon/sysfs-interface
+
+  abi <abi/4.0>,
+
+  include <abstractions/sys/gpumon>
+  include <abstractions/sys/hwmon-alarm>
+  include <abstractions/sys/hwmon-current>
+  include <abstractions/sys/hwmon-energy>
+  include <abstractions/sys/hwmon-fan>
+  include <abstractions/sys/hwmon-humidity>
+  include <abstractions/sys/hwmon-intrusion>
+  include <abstractions/sys/hwmon-power>
+  include <abstractions/sys/hwmon-pwm>
+  include <abstractions/sys/hwmon-temp>
+  include <abstractions/sys/hwmon-voltages>
+
+  include if exists <abstractions/hwmon.d>
+
+# vim:syntax=apparmor

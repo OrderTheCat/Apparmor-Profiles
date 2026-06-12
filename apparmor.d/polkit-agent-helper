@@ -1,0 +1,82 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2018-2022 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/polkit-[0-9]/polkit-agent-helper-[0-9]
+@{exec_path} += @{lib}/polkit-agent-helper-[0-9]
+@{att} = /att/polkit-agent-helper/
+profile polkit-agent-helper /{{,usr/}lib{,exec,32,64}/polkit-[0-9]/polkit-agent-helper-[0-9],{,usr/}lib{,exec,32,64}/polkit-agent-helper-[0-9],{,usr/}lib{,exec,32,64}/polkit-agent-helper-[0-9]} flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/authentication>
+  include <abstractions/bus-system>
+  include <abstractions/attached/consoles>
+  include <abstractions/attached/nameservice-strict>
+
+  capability audit_write,
+  capability chown,
+  capability dac_override,
+  capability fowner,
+  capability net_admin,
+  capability setgid,
+  capability setuid,
+  capability sys_nice,
+  capability sys_ptrace, # optional: no audit
+
+  network netlink raw,
+
+  ptrace read peer=@{p_systemd},
+  ptrace read peer=gnome-shell,
+  ptrace read peer=pkttyagent,
+  ptrace read peer=polkit-kde-authentication-agent,
+
+  signal receive set=(term kill) peer=flatpak,
+  signal receive set=(term kill) peer=gnome-shell,
+  signal receive set=(term kill) peer=pkexec,
+  signal receive set=(term kill) peer=pkttyagent,
+  signal receive set=(term kill) peer=polkit-*-authentication-agent,
+  signal receive set=(term kill) peer=yay,
+
+  unix bind type=stream addr=@@{udbus}/bus/polkit-agent-he/system,
+
+  dbus send bus=system path=/org/freedesktop/PolicyKit1/Authority
+       interface=org.freedesktop.DBus.Properties
+       member=GetAll
+       peer=(name=@{busname}, label="@{p_polkitd}"),
+
+  dbus send bus=system path=/org/freedesktop/PolicyKit1/Authority
+       interface=org.freedesktop.PolicyKit1.Authority
+       member=AuthenticationAgentResponse{2,3}
+       peer=(name=@{busname}, label="@{p_polkitd}"),
+
+  dbus send bus=system path=/org/freedesktop/home1
+       interface=org.freedesktop.home1.Manager
+       member=GetUserRecordByName
+       peer=(name=org.freedesktop.home1, label=systemd-homed),
+
+  @{exec_path} mr,
+
+
+  priority=1 @{sbin}/unix_chkpwd px -> polkit-agent-helper//&unix-chkpwd,
+
+  owner @{HOME}/.xsession-errors w,
+
+        @{run}/faillock/@{user} rwk,
+  @{att}@{run}/systemd/home/@{user}.dont-suspend w,
+
+        @{PROC}/@{pid}/cgroup r,
+        @{PROC}/@{pid}/stat r,
+        @{PROC}/@{pid}/fdinfo/@{int} r,
+  owner @{PROC}/@{pid}/cgroup r,
+  owner @{PROC}/@{pid}/loginuid r,
+
+  owner /dev/tty@{u8} rw,
+
+  include if exists <local/polkit-agent-helper>
+}
+
+# vim:syntax=apparmor

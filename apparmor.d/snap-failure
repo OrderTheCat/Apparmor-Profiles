@@ -1,0 +1,53 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{lib_dirs} = @{lib}/ /snap/{snapd,core}/{,x}@{int}@{lib}
+
+@{exec_path} = @{lib_dirs}/snapd/snap-failure
+@{att} = ""
+profile snap-failure /{{,usr/}lib{,exec,32,64}/snapd/snap-failure,snap/{snapd,core}/{,x}[0-9]{[0-9],}{[0-9],}{[0-9],}{[0-9],}{[0-9],}{[0-9],}{[0-9],}{[0-9],}{[0-9],}/{,usr/}lib{,exec,32,64}/snapd/snap-failure} flags=(complain) {
+  include <abstractions/base-strict>
+
+  @{exec_path} mr,
+  @{lib_dirs}/**.so* mr,
+
+  @{bin}/systemctl         cx -> systemctl,
+  @{bin}/systemd-run       cx -> run,
+  @{lib_dirs}/snapd/snapd  px,
+
+  /var/lib/snapd/sequence/snapd.json r,
+
+  /snap/snapd/ r,
+  /snap/snapd/current w,
+  /snap/snapd/current.@{rand12}~ rw,
+
+  @{PROC}/cmdline r,
+
+  profile run flags=(complain) {
+    include <abstractions/base-strict>
+
+    @{bin}/systemd-run mr,
+
+    include if exists <local/snap-failure_run>
+  }
+
+  profile systemctl flags=(complain) {
+    include <abstractions/base-strict>
+    include <abstractions/app/systemctl>
+
+    capability net_admin,
+
+    ptrace read peer=@{p_systemd},
+
+    include if exists <local/snap-failure_systemctl>
+  }
+
+  include if exists <local/snap-failure>
+}
+
+# vim:syntax=apparmor

@@ -1,0 +1,31 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/xdg-user-dir
+@{att} = /att/xdg-user-dir/
+profile xdg-user-dir /{,usr/}bin/xdg-user-dir flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+  include <abstractions/attached/nameservice-strict>
+
+  @{exec_path} mr,
+
+  @{sh_path}  rix,
+  @{bin}/env  rix,
+
+  owner @{user_config_dirs}/user-dirs.dirs r,
+
+  # Silencer
+  deny network inet stream,
+  deny network inet6 stream,
+  deny @{user_share_dirs}/gvfs-metadata/* r,
+
+  include if exists <local/xdg-user-dir>
+}
+
+# vim:syntax=apparmor

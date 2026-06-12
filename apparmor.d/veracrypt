@@ -1,0 +1,123 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/veracrypt
+@{att} = /att/veracrypt/
+profile veracrypt /{,usr/}bin/veracrypt flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/audio-client>
+  include <abstractions/attached/consoles>
+  include <abstractions/dconf-write>
+  include <abstractions/desktop>
+  include <abstractions/disks-write>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/pcscd>
+
+  capability chown,
+  capability dac_read_search,
+  capability fsetid,
+  capability sys_admin,
+  capability sys_ptrace,
+
+  mount fstype=fuse.veracrypt options=(rw nodev nosuid) veracrypt -> /tmp/.veracrypt_*/,
+
+  @{exec_path} mrix,
+
+  @{sh_path}        rix,
+  @{open_path}      rpx -> child-open-help,
+  @{sbin}/dmsetup   rpx,
+  @{bin}/{,e}grep   rix,
+  @{bin}/kmod       rcx -> kmod,
+  @{sbin}/ldconfig  rix,
+  @{sbin}/ldconfig.real ix,
+  @{sbin}/losetup   rcx -> losetup,
+  @{bin}/mount      rpx,
+  @{bin}/sudo       rcx -> sudo,
+  @{bin}/umount     rcx -> umount,
+  @{bin}/wc         rix,
+  @{file_explorers_path} rpx,
+
+  # Mount points
+  @{MOUNTS}/ rw,
+  @{MOUNTS}/*/ rw,
+
+  /home/ r,
+  owner @{HOME}/ r,
+  owner @{HOME}/.VeraCrypt-lock-@{user} rwk,
+
+  owner @{user_config_dirs}/VeraCrypt/ rw,
+  owner @{user_config_dirs}/VeraCrypt/** rwk,
+
+  /tmp/.veracrypt_*/ rw,
+  /tmp/.veracrypt_*/** rwk,
+
+  /dev/shm/ r,
+
+        @{PROC}/partitions r,
+  owner @{PROC}/@{pid}/cgroup r,
+  owner @{PROC}/@{pid}/mounts r,
+
+  /dev/fuse rw,
+  /dev/tty rw,
+
+  profile umount flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+
+    capability sys_admin,
+
+    umount /tmp/.veracrypt_*/,
+    umount @{MOUNTS}/{,*/},
+
+    @{bin}/umount mr,
+
+    owner @{run}/mount/utab r,
+
+    include if exists <local/veracrypt_umount>
+  }
+
+  profile losetup flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/disks-write>
+
+    capability sys_rawio,
+
+    @{sbin}/losetup mr,
+
+    include if exists <local/veracrypt_losetup>
+  }
+
+  profile kmod flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/app/kmod>
+
+    @{sys}/module/compression r,
+    @{sys}/module/dm_mod/initstate r,
+
+    include if exists <local/veracrypt_kmod>
+  }
+
+  profile sudo flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/app/sudo>
+
+    capability sys_ptrace,
+
+    ptrace read peer=veracrypt,
+
+    @{bin}/veracrypt px,
+
+    @{HOME}/.VeraCrypt-lock-@{user} w,
+    @{user_config_dirs}/VeraCrypt/.show-request-queue r,
+
+    include if exists <local/veracrypt_sudo>
+  }
+
+  include if exists <local/veracrypt>
+}
+
+# vim:syntax=apparmor

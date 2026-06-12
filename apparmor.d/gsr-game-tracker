@@ -1,0 +1,31 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2026 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/gsr-game-tracker
+@{att} = ""
+profile gsr-game-tracker /{,usr/}bin/gsr-game-tracker flags=(complain) {
+  include <abstractions/base-strict>
+
+  capability sys_ptrace,
+
+  network netlink dgram,
+
+  signal (receive) set=(int) peer=gsr-ui,
+
+  ptrace read,
+
+  @{exec_path} r,
+
+        @{PROC}/ r,
+        @{PROC}/@{pid}/cmdline r,
+  owner @{PROC}/@{pid}/environ r,
+
+  include if exists <local/gsr-game-tracker>
+}
+
+# vim:syntax=apparmor

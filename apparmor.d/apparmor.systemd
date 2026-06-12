@@ -1,0 +1,63 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/apparmor/apparmor.systemd
+@{att} = ""
+profile apparmor.systemd /{,usr/}lib{,exec,32,64}/apparmor/apparmor.systemd flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/consoles>
+  include <abstractions/nameservice-strict>
+
+  capability dac_read_search,
+  capability mac_admin,
+
+  @{exec_path} mr,
+
+  @{sh_path}                  rix,
+  @{bin}/{,e}grep             rix,
+  @{sbin}/aa-status           rpx,
+  @{sbin}/apparmor_parser     rpx,
+  @{bin}/getconf              rix,
+  @{bin}/ls                   rix,
+  @{bin}/sed                  rix,
+  @{bin}/cat                  rix,
+  @{bin}/sort                 rix,
+  @{sbin}/sysctl              rcx -> sysctl,
+  @{bin}/systemd-detect-virt  rpx,
+  @{bin}/xargs                rix,
+
+  @{lib}/apparmor/rc.apparmor.functions r,
+
+  /etc/apparmor.d/ r,
+
+  @{sys}/fs/cgroup/systemd/ r,
+  @{sys}/kernel/security/apparmor/{,**} r,
+  @{sys}/kernel/security/apparmor/.remove rw,
+  @{sys}/module/apparmor/ r,
+
+  @{PROC}/@{pids}/fd/ r,
+  @{PROC}/@{pids}/maps r,
+  @{PROC}/@{pids}/mounts r,
+  @{PROC}/mounts r,
+
+  /dev/tty rw,
+
+  profile sysctl flags=(complain) {
+    include <abstractions/base-strict>
+
+    @{sbin}/sysctl mr,
+
+    @{PROC}/sys/kernel/apparmor_restrict_unprivileged_userns r,
+
+    include if exists <local/apparmor.systemd_sysctl>
+  }
+
+  include if exists <local/apparmor.systemd>
+}
+
+# vim:syntax=apparmor

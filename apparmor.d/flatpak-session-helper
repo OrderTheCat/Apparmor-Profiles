@@ -1,0 +1,112 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{appid} = @{word}.@{word}.@{word}{,.@{word}}
+
+@{exec_path} = @{lib}/flatpak-session-helper
+@{att} = /att/flatpak-session-helper/
+profile flatpak-session-helper /{,usr/}lib{,exec,32,64}/flatpak-session-helper flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-session>
+  include <abstractions/attached/consoles>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/p11-kit>
+
+  signal send set=(hup int) peer=user_unconfined,
+  signal send set=int peer=@{p_systemd},
+  signal send set=int peer=flatpak-session-helper-app,
+
+  #aa/dbus own bus=session name=org.freedesktop.Flatpak
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.freedesktop.Flatpak{,.*},
+  dbus receive bus=session path=/org/freedesktop/Flatpak{,/**}
+       interface=org.freedesktop.Flatpak{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/freedesktop/Flatpak{,/**}
+       interface=org.freedesktop.Flatpak{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/freedesktop/Flatpak{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/freedesktop/Flatpak{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/freedesktop/Flatpak{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.Flatpak{,.*}}"),
+  dbus send bus=session path=/org/freedesktop/Flatpak{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  dbus receive bus=session
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name=@{busname}, label="{gnome-shell,gnome-extension}"),
+
+  @{exec_path} mr,
+
+  @{shells_path}                       rux,
+  @{coreutils_path}                    rix,
+  @{bin}/dbus-monitor                 rpux,
+  @{bin}/flatpak                       rpx,
+  @{bin}/getent                        rix,
+  @{bin}/p11-kit                       rcx -> p11-kit,
+  @{bin}/pkexec                        rcx -> pkexec,
+  @{bin}/printenv                      rix,
+  @{bin}/ps                            rpx,
+
+  /var/lib/flatpak/app/@{appid}/**/@{bin}/**  rpx -> flatpak-session-helper-app,
+  /var/lib/flatpak/app/@{appid}/**/@{lib}/**  rpx -> flatpak-session-helper-app,
+
+  owner @{user_cache_dirs}/.flatpak-helper/{,**} rw,
+
+  owner @{user_config_dirs}/mimeapps.list w,
+
+  owner @{run}/user/@{uid}/.flatpak-helper/{,**} rw,
+
+  /dev/ptmx rw,
+
+  profile pkexec flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+    include <abstractions/attached/base>
+    include <abstractions/app/pkexec>
+
+    include if exists <local/flatpak-session-helper_pkexec>
+  }
+
+  profile p11-kit flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+    include <abstractions/attached/base>
+    include <abstractions/ssl_certs>
+
+    signal receive set=term peer=flatpak-session-helper,
+
+    @{bin}/p11-kit mr,
+
+    @{lib}/p11-kit/p11-kit-remote  ix,
+    @{lib}/p11-kit/p11-kit-server  ix,
+
+    owner @{user_cache_dirs}/.flatpak-helper/pkcs11-flatpak-@{int} rw,
+
+    owner @{run}/user/@{uid}/.flatpak-helper/pkcs11-flatpak-@{int} rw,
+
+    owner @{PROC}/@{pids}/fd/ r,
+
+    include if exists <local/flatpak-session-helper_p11-kit>
+  }
+
+  include if exists <local/flatpak-session-helper>
+}
+
+# vim:syntax=apparmor

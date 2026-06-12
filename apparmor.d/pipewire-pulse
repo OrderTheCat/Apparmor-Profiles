@@ -1,0 +1,80 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2015-2022 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/pipewire-pulse
+@{att} = /att/pipewire-pulse/
+profile pipewire-pulse /{,usr/}bin/pipewire-pulse flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/audio-client>
+  include <abstractions/bus-session>
+  include <abstractions/bus-system>
+  include <abstractions/bus/system/org.freedesktop.RealtimeKit1>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/sys/dmi>
+
+  capability sys_ptrace,
+
+  ptrace read,
+
+  #aa/dbus own bus=session name=org.pulseaudio.Server
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.pulseaudio.Server{,.*},
+  dbus receive bus=session path=/org/pulseaudio/Server{,/**}
+       interface=org.pulseaudio.Server{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/pulseaudio/Server{,/**}
+       interface=org.pulseaudio.Server{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/pulseaudio/Server{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/pulseaudio/Server{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/pulseaudio/Server{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.pulseaudio.Server{,.*}}"),
+  dbus send bus=session path=/org/pulseaudio/Server{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  @{exec_path} mr,
+
+  @{bin}/pactl rix,
+  @{bin}/pipewire mr,
+
+  /usr/share/pipewire/{,**} r,
+
+  /etc/pipewire/{,**} r,
+
+  /var/lib/dbus/machine-id r,
+  /etc/machine-id r,
+
+        @{att}/ r,
+  owner @{att}/.flatpak-info r,
+
+  owner @{run}/user/@{uid}/pulse/pid w,
+  owner @{tmp}/librnnoise-@{int}.so rm,
+
+  @{sys}/module/apparmor/parameters/enabled r,
+
+  owner @{PROC}/@{pid}/task/@{tid}/comm rw,
+
+  include if exists <local/pipewire-pulse>
+}
+
+# vim:syntax=apparmor

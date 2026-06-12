@@ -1,0 +1,64 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/kglobalaccel5 @{lib}/kglobalacceld
+@{att} = ""
+profile kglobalacceld /{{,usr/}bin/kglobalaccel5,{,usr/}lib{,exec,32,64}/kglobalacceld} flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/bus-session>
+  include <abstractions/kde-strict>
+
+  #aa/dbus own bus=session name=org.kde.KGlobalAccel path=/kglobalaccel
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.kde.KGlobalAccel{,.*},
+  dbus receive bus=session path=/kglobalaccel
+       interface=org.kde.KGlobalAccel{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/kglobalaccel
+       interface=org.kde.KGlobalAccel{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/kglobalaccel
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/kglobalaccel
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/kglobalaccel
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.kde.KGlobalAccel{,.*}}"),
+  dbus send bus=session path=/kglobalaccel
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  @{exec_path} mr,
+
+  @{bin}/kstart rpx,
+
+  /usr/share/kglobalaccel/{,**} r,
+
+  owner @{user_config_dirs}/#@{int} rw,
+  owner @{user_config_dirs}/kglobalshortcutsrc.lock rwk,
+  owner @{user_config_dirs}/kglobalshortcutsrc* rwl,
+  owner @{user_config_dirs}/khotkeysrc r,
+
+  @{PROC}/sys/kernel/random/boot_id r,
+
+  /dev/tty r,
+
+  include if exists <local/kglobalacceld>
+}
+
+# vim:syntax=apparmor

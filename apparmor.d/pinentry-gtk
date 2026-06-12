@@ -1,0 +1,37 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2020-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/pinentry-gtk{,-2}
+@{att} = ""
+profile pinentry-gtk /{,usr/}bin/pinentry-gtk{,-2} flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/consoles>
+  include <abstractions/fontconfig-cache-read>
+  include <abstractions/desktop>
+
+  dbus receive bus=session path=/org/gnome/keyring/Prompt/p@{int}
+       interface=org.gnome.keyring.internal.Prompter.Callback
+       member={PromptReady,PromptDone}
+       peer=(name=@{busname}),
+
+  dbus send bus=session path=/org/gnome/keyring/Prompter
+       interface=org.gnome.keyring.internal.Prompter
+       member={BeginPrompting,PerformPrompt,StopPrompting}
+       peer=(name=org.gnome.keyring.SystemPrompter),
+
+  @{exec_path} mr,
+
+  @{PROC}/@{pid}/cmdline r,
+
+  owner /dev/tty@{u8} r,
+
+  include if exists <local/pinentry-gtk>
+}
+
+# vim:syntax=apparmor

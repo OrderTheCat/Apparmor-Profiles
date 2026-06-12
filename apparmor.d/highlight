@@ -1,0 +1,25 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 valoq <valoq@mailbox.org>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/highlight
+@{att} = ""
+profile highlight /{,usr/}bin/highlight flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/nameservice-strict>
+  include <abstractions/user-read-strict>
+
+  @{exec_path} mr,
+
+  /etc/machine-id r,
+  /etc/highlight/{,**} r,
+  /usr/share/highlight/{,**} r,
+
+  include if exists <local/highlight>
+}
+
+# vim:syntax=apparmor

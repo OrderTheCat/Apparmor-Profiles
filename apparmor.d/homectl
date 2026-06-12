@@ -1,0 +1,71 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/homectl
+@{att} = /att/homectl/
+profile homectl /{,usr/}bin/homectl flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-system>
+  include <abstractions/common/systemd>
+  include <abstractions/attached/consoles>
+  include <abstractions/attached/nameservice-strict>
+
+  capability net_admin,
+  capability sys_resource,
+
+  signal send peer=child-pager,
+
+  #aa/dbus talk bus=system name=org.freedesktop.home1 label="@{p_systemd_homed}"
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label="@{p_systemd_homed}"),
+  # org.freedesktop.home1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/home1{,/**}
+       interface=org.freedesktop.home1{,.*}
+       peer=(name="{@{busname},org.freedesktop.home1{,.*},org.freedesktop.DBus}", label="@{p_systemd_homed}"),
+  dbus send bus=system path=/org/freedesktop/home1{,/**}
+       interface=org.freedesktop.home1{,.*}
+       peer=(name="org.freedesktop.home1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/home1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.home1{,.*},org.freedesktop.DBus}", label="@{p_systemd_homed}"),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/home1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.home1{,.*},org.freedesktop.DBus}", label="@{p_systemd_homed}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/home1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.home1{,.*},org.freedesktop.DBus}", label="@{p_systemd_homed}"),
+  dbus receive bus=system path=/org/freedesktop/home1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.home1{,.*},org.freedesktop.DBus}", label="@{p_systemd_homed}"),
+
+
+  @{exec_path} mr,
+
+  @{bin}/pkttyagent  rpx,
+
+  @{pager_path} rpx -> child-pager,
+
+  /etc/machine-id r,
+  /etc/security/pwquality.conf r,
+  /etc/security/pwquality.conf.d/{,*.conf} r,
+
+  owner @{PROC}/@{pids}/cgroup r,
+
+  /dev/tty rw,
+
+  include if exists <local/homectl>
+}
+
+# vim:syntax=apparmor

@@ -1,0 +1,66 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/{,gvfs/}gvfsd-wsdd
+@{att} = /att/gvfsd-wsdd/
+profile gvfsd-wsdd /{,usr/}lib{,exec,32,64}/{,gvfs/}gvfsd-wsdd flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/avahi-observe>
+  include <abstractions/bus-session>
+  include <abstractions/bus-system>
+  include <abstractions/gvfs-backend>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/network-manager-observe>
+
+  ## network inet dgram, # ip=127.0.0.1 peer=(ip=127.0.0.*, port=53),
+  network inet dgram,
+  network netlink raw,
+
+  #aa/dbus own bus=session name=org.gtk.vfs.mountpoint_wsdd
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gtk.vfs.mountpoint_wsdd{,.*},
+  dbus receive bus=session path=/org/gtk/vfs/mountpoint_wsdd{,/**}
+       interface=org.gtk.vfs.mountpoint_wsdd{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gtk/vfs/mountpoint_wsdd{,/**}
+       interface=org.gtk.vfs.mountpoint_wsdd{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gtk/vfs/mountpoint_wsdd{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gtk/vfs/mountpoint_wsdd{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gtk/vfs/mountpoint_wsdd{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gtk.vfs.mountpoint_wsdd{,.*}}"),
+  dbus send bus=session path=/org/gtk/vfs/mountpoint_wsdd{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  @{exec_path} mr,
+
+  @{bin}/env mr,
+  @{bin}/wsdd rpx,
+
+        @{run}/mount/utab r,
+  owner @{run}/user/@{uid}/gvfsd/socket-@{rand8} rw,
+  owner @{run}/user/@{uid}/gvfsd/wsdd rw,
+
+  include if exists <local/gvfsd-wsdd>
+}
+
+# vim:syntax=apparmor

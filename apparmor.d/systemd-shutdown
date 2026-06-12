@@ -1,0 +1,54 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2020-2022 Mikhail Morfikov
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/systemd/systemd-shutdown
+@{att} = /att/systemd-shutdown/
+profile systemd-shutdown /{,usr/}lib{,exec,32,64}/systemd/systemd-shutdown flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/common/systemd>
+
+  capability ipc_lock,
+  capability kill,
+  capability sys_admin,
+  capability sys_boot,
+  capability sys_ptrace,
+  capability sys_resource,
+
+  mount options=(rw make-rprivate) /,
+
+  umount,
+
+  ptrace read,
+
+  signal (send)    set=(stop, cont, term, kill),
+  signal (receive) set=(rtmin+23) peer=plymouthd,
+
+  @{exec_path} mr,
+
+  @{run}/initramfs/{,**} r,
+
+        @{PROC}/ r,
+        @{PROC}/@{pids}/cgroup r,
+        @{PROC}/@{pids}/cmdline r,
+        @{PROC}/@{pids}/fd/ r,
+        @{PROC}/@{pids}/fdinfo/@{int} r,
+        @{PROC}/@{pids}/stat r,
+        @{PROC}/@{pids}/status r,
+  owner @{PROC}/@{pid}/comm r,
+  owner @{PROC}/@{pid}/mountinfo r,
+  owner @{PROC}/@{pid}/mounts r,
+  owner @{PROC}/sys/kernel/core_pattern w,
+  owner @{PROC}/sys/kernel/printk rw,
+
+  /dev/watchdog@{int} w,
+
+  include if exists <local/systemd-shutdown>
+}
+
+# vim:syntax=apparmor

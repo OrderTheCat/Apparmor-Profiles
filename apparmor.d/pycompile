@@ -1,0 +1,62 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/py{,3}compile @{bin}/py{,3}clean
+@{att} = /att/pycompile/
+profile pycompile /{{,usr/}bin/py{,3}compile,{,usr/}bin/py{,3}clean} flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/apt>
+  include <abstractions/attached/consoles>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/python>
+
+  capability dac_override,
+  capability dac_read_search,
+
+  @{exec_path} mr,
+  @{python_path} rix,
+
+  @{bin}/dpkg rcx -> dpkg,
+
+  priority=1 @{lib}/**/__pycache__/ rw,
+  priority=1 @{lib}/**/__pycache__/*.pyc rw,
+  priority=1 @{lib}/**/__pycache__/*.pyc.* rw,
+
+  /usr/share/**/ r,
+
+  /usr/share/**/__pycache__/ rw,
+  /usr/share/**/__pycache__/*.pyc rw,
+  /usr/share/**/__pycache__/*.pyc.* rw,
+
+  /usr/share/@{python_name}/{,**} r,
+  /usr/share/**.py r,
+
+  / r,
+  @{bin}/ r,
+  @{sbin}/ r,
+
+  profile dpkg flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/apt>
+    include <abstractions/attached/consoles>
+
+    capability dac_read_search,
+
+    @{bin}/dpkg mr,
+    @{bin}/dpkg-query rpx,
+
+    /etc/dpkg/dpkg.cfg.d/{,*} r,
+    /etc/dpkg/dpkg.cfg r,
+
+    include if exists <local/pycompile_dpkg>
+  }
+
+  include if exists <local/pycompile>
+}
+
+# vim:syntax=apparmor

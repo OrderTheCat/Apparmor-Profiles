@@ -1,0 +1,33 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023 Jeroen Rijken
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/kstart
+@{att} = /att/kstart/
+profile kstart /{,usr/}bin/kstart flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/fontconfig-cache-read>
+  include <abstractions/graphics>
+  include <abstractions/kde-open5>
+  include <abstractions/kde-strict>
+  include <abstractions/attached/nameservice-strict>
+
+  @{exec_path} mr,
+
+  @{bin}/** rpux,
+  @{bin}/konsole rpx,
+
+  owner @{user_share_dirs}/kservices{5,6}/ r,
+  owner @{user_share_dirs}/kservices{5,6}/ServiceMenus/ r,
+
+  @{PROC}/sys/dev/i915/perf_stream_paranoid r,
+
+  include if exists <local/kstart>
+}
+
+# vim:syntax=apparmor

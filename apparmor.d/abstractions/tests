@@ -1,0 +1,51 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+# LOGPROF-SUGGEST: no
+
+# Common temporary tests directories used by autopkgtest.
+#
+# !!! warning
+#
+#     Do not use it manually, It is automatically included in the base abstraction
+#     when the 'test' prebuild flag is set.
+#
+# !!! note
+#
+#     When needed, this abstraction is included in the `base` / `base-strict` abstractions.
+#     It is not necessary to include it manually.
+#
+
+  abi <abi/4.0>,
+
+  # @{exec_path}.distrib mrix,
+
+  @{lib}/installed-tests/ r,
+  @{lib}/installed-tests/** rw,
+
+  /usr/share/installed-tests/{,**} r,
+
+  owner /m-a/{,**} rwlk,
+
+  owner /test-*/{,**} rw,
+  owner /test/{,**} rw,
+
+  owner /trigger{,s}/{,**} rw,
+
+  /tmp/autopkgtest* rwlkmix,
+  /tmp/autopkgtest*/ rw,
+  /tmp/autopkgtest*/** rwlkmix,
+
+  /tmp/shunit.@{rand6}/ rw,
+  /tmp/shunit.@{rand6}/** rwlk,
+
+  /tmp/test*/ rw,
+  priority=-1 /tmp/test*/** rwlkmix,
+  /tmp/*test*/ rw,
+  priority=-1 /tmp/*test*/** rwlkmix,
+
+  owner /tmp/dbusmock_data_*/{,**} rwlk,
+
+  include if exists <abstractions/tests.d>
+
+# vim:syntax=apparmor

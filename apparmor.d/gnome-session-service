@@ -1,0 +1,142 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/gnome-session-service
+@{att} = /att/gnome-session-service/
+profile gnome-session-service /{,usr/}lib{,exec,32,64}/gnome-session-service flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus/session/org.freedesktop.systemd1>
+  include <abstractions/dconf-write>
+  include <abstractions/gnome-strict>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/screensaver>
+
+  #aa/dbus own bus=session name=org.gnome.SessionManager
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gnome.SessionManager{,.*},
+  dbus receive bus=session path=/org/gnome/SessionManager{,/**}
+       interface=org.gnome.SessionManager{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/SessionManager{,/**}
+       interface=org.gnome.SessionManager{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gnome/SessionManager{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gnome/SessionManager{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gnome/SessionManager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.SessionManager{,.*}}"),
+  dbus send bus=session path=/org/gnome/SessionManager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus talk bus=system name=org.freedesktop.login1 label="@{p_systemd_logind}"
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label="@{p_systemd_logind}"),
+  # org.freedesktop.login1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.login1{,.*}
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label="@{p_systemd_logind}"),
+  dbus send bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.login1{,.*}
+       peer=(name="org.freedesktop.login1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label="@{p_systemd_logind}"),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label="@{p_systemd_logind}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label="@{p_systemd_logind}"),
+  dbus receive bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label="@{p_systemd_logind}"),
+
+
+  dbus send bus=session path=/org/freedesktop/DBus
+       interface=org.freedesktop.DBus
+       member=UpdateActivationEnvironment
+       peer=(name=org.freedesktop.DBus label="@{p_dbus_session}"),
+
+  dbus receive bus=session
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name=@{busname}, label="{gnome-shell,gnome-extension}"),
+
+  @{exec_path} mr,
+
+  @{bin}/session-migration                       rpx,
+
+  @{lib}/gio-launch-desktop                               rcx -> open,
+  @{lib}/@{multiarch}/glib-@{version}/gio-launch-desktop  rcx -> open,
+
+  /usr/share/gdm/greeter/applications/{,**} r,
+  /usr/share/gdm/greeter/autostart/{,*.desktop} r,
+  /usr/share/gnome-session/hardware-compatibility r,
+  /usr/share/gnome-session/sessions/*.session r,
+  /usr/share/gnome/autostart/{,*.desktop} r,
+
+  @{etc_ro}/xdg/autostart/{,*.desktop} r,
+
+  owner @{user_config_dirs}/autostart/{,*.desktop} r,
+
+  owner @{user_state_dirs}/ w,
+  owner @{user_state_dirs}/gnome-session@*.state rw,
+  owner @{user_state_dirs}/gnome-session@*.state.@{rand6} rw,
+
+        @{run}/systemd/sessions/{,@{l}}@{int}{,.ref} rw,
+  @{att}@{run}/systemd/inhibit/@{int}.ref rw,
+  @{att}@{run}/systemd/sessions/{,@{l}}@{int}{,.ref} rw,
+  @{run}/systemd/users/@{uid} r,
+
+  owner @{run}/user/@{uid}/systemd/notify w,
+
+        @{PROC}/1/cgroup r,
+  owner @{PROC}/@{pid}/cgroup r,
+
+  profile open flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/attached/consoles>
+
+    @{lib}/@{multiarch}/glib-@{version}/gio-launch-desktop  mr,
+    @{lib}/gio-launch-desktop                               mr,
+
+    @{sh_path}                    rix,
+    @{bin}/env                    rix,
+    @{lib}/**                     pux,
+    @{bin}/**                     pux,
+    /opt/*/**                     pux,
+    /usr/share/*/**               pux,
+    /usr/local/bin/**             pux,
+    /usr/games/**                 pux,
+
+    include if exists <local/gnome-session-service_open>
+  }
+
+  include if exists <local/gnome-session-service>
+}
+
+# vim:syntax=apparmor

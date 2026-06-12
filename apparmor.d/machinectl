@@ -1,0 +1,81 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/machinectl
+@{att} = /att/machinectl/
+profile machinectl /{,usr/}bin/machinectl flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-system>
+  include <abstractions/common/systemd>
+  include <abstractions/attached/consoles>
+  include <abstractions/attached/nameservice-strict>
+
+  capability net_admin,
+  capability sys_ptrace,
+  capability sys_resource,
+
+  signal send set=(cont term winch) peer=child-pager,
+  signal send set=(cont term winch) peer=pkttyagent,
+  signal send set=(cont term winch) peer=systemd-tty-ask-password-agent,
+
+  #aa/dbus talk bus=system name=org.freedesktop.machine1 label=systemd-machined
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=systemd-machined),
+  # org.freedesktop.machine1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/machine1{,/**}
+       interface=org.freedesktop.machine1{,.*}
+       peer=(name="{@{busname},org.freedesktop.machine1{,.*},org.freedesktop.DBus}", label=systemd-machined),
+  dbus send bus=system path=/org/freedesktop/machine1{,/**}
+       interface=org.freedesktop.machine1{,.*}
+       peer=(name="org.freedesktop.machine1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/machine1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.machine1{,.*},org.freedesktop.DBus}", label=systemd-machined),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/machine1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.machine1{,.*},org.freedesktop.DBus}", label=systemd-machined),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/machine1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.machine1{,.*},org.freedesktop.DBus}", label=systemd-machined),
+  dbus receive bus=system path=/org/freedesktop/machine1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.machine1{,.*},org.freedesktop.DBus}", label=systemd-machined),
+
+  dbus send bus=system path=/org/freedesktop/machine1
+       interface=org.freedesktop.machine1.Manager
+       peer=(name=org.freedesktop.machine1),
+
+  @{exec_path} mr,
+
+  @{bin}/pkttyagent                      px,
+  @{bin}/systemd-tty-ask-password-agent  px,
+  @{pager_path}                          px -> child-pager,
+
+  /{run,var}/log/journal/ r,
+  /{run,var}/log/journal/@{hex32}/{,*} r,
+
+  @{run}/systemd/machines/{,**} r,
+
+  @{PROC}/@{pid}/comm r,
+
+        @{PROC}/sys/fs/nr_open r,
+  owner @{PROC}/@{pid}/cgroup r,
+
+  /dev/pts/ptmx rw,
+
+  include if exists <local/machinectl>
+}
+
+# vim:syntax=apparmor

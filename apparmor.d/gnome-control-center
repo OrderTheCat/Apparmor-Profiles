@@ -1,0 +1,1159 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/gnome-control-center
+@{att} = /att/gnome-control-center/
+profile gnome-control-center /{,usr/}bin/gnome-control-center flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/audio-client>
+  include <abstractions/avahi-observe>
+  include <abstractions/bus/session/org.gtk.vfs.Daemon>
+  include <abstractions/camera>
+  include <abstractions/cups-client>
+  include <abstractions/dconf-write>
+  include <abstractions/fontconfig-cache-write>
+  include <abstractions/gnome-strict>
+  include <abstractions/graphics>
+  include <abstractions/gstreamer>
+  include <abstractions/ibus-strict>
+  include <abstractions/media-control>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/p11-kit>
+  include <abstractions/ssl_certs>
+  include <abstractions/thumbnails-cache-write>
+
+  network inet dgram,
+  network inet6 dgram,
+  network inet stream,
+  network inet6 stream,
+  network netlink raw,
+
+  signal send set=kill peer=unconfined,
+  signal send set=kill peer=passwd,
+
+  #aa/dbus own bus=session name=org.gnome.Settings
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gnome.Settings{,.*},
+  dbus receive bus=session path=/org/gnome/Settings{,/**}
+       interface=org.gnome.Settings{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/Settings{,/**}
+       interface=org.gnome.Settings{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gnome/Settings{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gnome/Settings{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gnome/Settings{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.Settings{,.*}}"),
+  dbus send bus=session path=/org/gnome/Settings{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=session name=org.bluez.obex.Agent1
+  dbus bind bus=session name=org.bluez.obex.Agent1{,.*},
+  dbus receive bus=session path=/org/bluez/obex/Agent1{,/**}
+       interface=org.bluez.obex.Agent1{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/bluez/obex/Agent1{,/**}
+       interface=org.bluez.obex.Agent1{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/bluez/obex/Agent1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/bluez/obex/Agent1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/bluez/obex/Agent1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.bluez.obex.Agent1{,.*}}"),
+  dbus send bus=session path=/org/bluez/obex/Agent1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  #aa/dbus talk bus=session name=org.bluez.obex label=obexd
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=obexd),
+  # org.bluez.obex: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/bluez/obex{,/**}
+       interface=org.bluez.obex{,.*}
+       peer=(name="{@{busname},org.bluez.obex{,.*},org.freedesktop.DBus}", label=obexd),
+  dbus send bus=session path=/org/bluez/obex{,/**}
+       interface=org.bluez.obex{,.*}
+       peer=(name="org.bluez.obex{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/bluez/obex{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.bluez.obex{,.*},org.freedesktop.DBus}", label=obexd),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/bluez/obex{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.bluez.obex{,.*},org.freedesktop.DBus}", label=obexd),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/bluez/obex{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.bluez.obex{,.*},org.freedesktop.DBus}", label=obexd),
+  dbus receive bus=session path=/org/bluez/obex{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.bluez.obex{,.*},org.freedesktop.DBus}", label=obexd),
+
+  #aa/dbus talk bus=session name=org.freedesktop.impl.portal.PermissionStore label=xdg-permission-store
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=xdg-permission-store),
+  # org.freedesktop.impl.portal.PermissionStore: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/freedesktop/impl/portal/PermissionStore{,/**}
+       interface=org.freedesktop.impl.portal.PermissionStore{,.*}
+       peer=(name="{@{busname},org.freedesktop.impl.portal.PermissionStore{,.*},org.freedesktop.DBus}", label=xdg-permission-store),
+  dbus send bus=session path=/org/freedesktop/impl/portal/PermissionStore{,/**}
+       interface=org.freedesktop.impl.portal.PermissionStore{,.*}
+       peer=(name="org.freedesktop.impl.portal.PermissionStore{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/freedesktop/impl/portal/PermissionStore{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.impl.portal.PermissionStore{,.*},org.freedesktop.DBus}", label=xdg-permission-store),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/freedesktop/impl/portal/PermissionStore{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.impl.portal.PermissionStore{,.*},org.freedesktop.DBus}", label=xdg-permission-store),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/freedesktop/impl/portal/PermissionStore{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.impl.portal.PermissionStore{,.*},org.freedesktop.DBus}", label=xdg-permission-store),
+  dbus receive bus=session path=/org/freedesktop/impl/portal/PermissionStore{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.impl.portal.PermissionStore{,.*},org.freedesktop.DBus}", label=xdg-permission-store),
+
+  #aa/dbus talk bus=session name=org.gnome.Identity label=goa-identity-service
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=goa-identity-service),
+  # org.gnome.Identity: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/gnome/Identity{,/**}
+       interface=org.gnome.Identity{,.*}
+       peer=(name="{@{busname},org.gnome.Identity{,.*},org.freedesktop.DBus}", label=goa-identity-service),
+  dbus send bus=session path=/org/gnome/Identity{,/**}
+       interface=org.gnome.Identity{,.*}
+       peer=(name="org.gnome.Identity{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/gnome/Identity{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gnome.Identity{,.*},org.freedesktop.DBus}", label=goa-identity-service),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/gnome/Identity{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gnome.Identity{,.*},org.freedesktop.DBus}", label=goa-identity-service),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/gnome/Identity{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.Identity{,.*},org.freedesktop.DBus}", label=goa-identity-service),
+  dbus receive bus=session path=/org/gnome/Identity{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gnome.Identity{,.*},org.freedesktop.DBus}", label=goa-identity-service),
+
+  #aa/dbus talk bus=session name=org.gnome.Mutter label=gnome-shell
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=gnome-shell),
+  # org.gnome.Mutter: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/gnome/Mutter{,/**}
+       interface=org.gnome.Mutter{,.*}
+       peer=(name="{@{busname},org.gnome.Mutter{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  dbus send bus=session path=/org/gnome/Mutter{,/**}
+       interface=org.gnome.Mutter{,.*}
+       peer=(name="org.gnome.Mutter{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/gnome/Mutter{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gnome.Mutter{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/gnome/Mutter{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gnome.Mutter{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/gnome/Mutter{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.Mutter{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  dbus receive bus=session path=/org/gnome/Mutter{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gnome.Mutter{,.*},org.freedesktop.DBus}", label=gnome-shell),
+
+  #aa/dbus talk bus=session name=org.gnome.OnlineAccounts label=goa-daemon
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=goa-daemon),
+  # org.gnome.OnlineAccounts: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/gnome/OnlineAccounts{,/**}
+       interface=org.gnome.OnlineAccounts{,.*}
+       peer=(name="{@{busname},org.gnome.OnlineAccounts{,.*},org.freedesktop.DBus}", label=goa-daemon),
+  dbus send bus=session path=/org/gnome/OnlineAccounts{,/**}
+       interface=org.gnome.OnlineAccounts{,.*}
+       peer=(name="org.gnome.OnlineAccounts{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/gnome/OnlineAccounts{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gnome.OnlineAccounts{,.*},org.freedesktop.DBus}", label=goa-daemon),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/gnome/OnlineAccounts{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gnome.OnlineAccounts{,.*},org.freedesktop.DBus}", label=goa-daemon),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/gnome/OnlineAccounts{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.OnlineAccounts{,.*},org.freedesktop.DBus}", label=goa-daemon),
+  dbus receive bus=session path=/org/gnome/OnlineAccounts{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gnome.OnlineAccounts{,.*},org.freedesktop.DBus}", label=goa-daemon),
+
+  #aa/dbus talk bus=session name=org.gnome.SessionManager label="@{p_gnome_session}"
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label="@{p_gnome_session}"),
+  # org.gnome.SessionManager: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/gnome/SessionManager{,/**}
+       interface=org.gnome.SessionManager{,.*}
+       peer=(name="{@{busname},org.gnome.SessionManager{,.*},org.freedesktop.DBus}", label="@{p_gnome_session}"),
+  dbus send bus=session path=/org/gnome/SessionManager{,/**}
+       interface=org.gnome.SessionManager{,.*}
+       peer=(name="org.gnome.SessionManager{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/gnome/SessionManager{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gnome.SessionManager{,.*},org.freedesktop.DBus}", label="@{p_gnome_session}"),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/gnome/SessionManager{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gnome.SessionManager{,.*},org.freedesktop.DBus}", label="@{p_gnome_session}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/gnome/SessionManager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.SessionManager{,.*},org.freedesktop.DBus}", label="@{p_gnome_session}"),
+  dbus receive bus=session path=/org/gnome/SessionManager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gnome.SessionManager{,.*},org.freedesktop.DBus}", label="@{p_gnome_session}"),
+
+  #aa/dbus talk bus=session name=org.gnome.SettingsDaemon.* label="gsd-*"
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label="gsd-*"),
+  # org.gnome.SettingsDaemon.*: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/gnome/SettingsDaemon/*{,/**}
+       interface=org.gnome.SettingsDaemon.*{,.*}
+       peer=(name="{@{busname},org.gnome.SettingsDaemon.*{,.*},org.freedesktop.DBus}", label="gsd-*"),
+  dbus send bus=session path=/org/gnome/SettingsDaemon/*{,/**}
+       interface=org.gnome.SettingsDaemon.*{,.*}
+       peer=(name="org.gnome.SettingsDaemon.*{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/gnome/SettingsDaemon/*{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gnome.SettingsDaemon.*{,.*},org.freedesktop.DBus}", label="gsd-*"),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/gnome/SettingsDaemon/*{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gnome.SettingsDaemon.*{,.*},org.freedesktop.DBus}", label="gsd-*"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/gnome/SettingsDaemon/*{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.SettingsDaemon.*{,.*},org.freedesktop.DBus}", label="gsd-*"),
+  dbus receive bus=session path=/org/gnome/SettingsDaemon/*{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gnome.SettingsDaemon.*{,.*},org.freedesktop.DBus}", label="gsd-*"),
+
+  #aa/dbus talk bus=session name=org.gnome.Shell label=gnome-shell
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=gnome-shell),
+  # org.gnome.Shell: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/gnome/Shell{,/**}
+       interface=org.gnome.Shell{,.*}
+       peer=(name="{@{busname},org.gnome.Shell{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  dbus send bus=session path=/org/gnome/Shell{,/**}
+       interface=org.gnome.Shell{,.*}
+       peer=(name="org.gnome.Shell{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/gnome/Shell{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gnome.Shell{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/gnome/Shell{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gnome.Shell{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/gnome/Shell{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.Shell{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  dbus receive bus=session path=/org/gnome/Shell{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gnome.Shell{,.*},org.freedesktop.DBus}", label=gnome-shell),
+
+  #aa/dbus talk bus=session name=org.gnome.Shell.Extensions label=gjs
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=gjs),
+  # org.gnome.Shell.Extensions: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/gnome/Shell/Extensions{,/**}
+       interface=org.gnome.Shell.Extensions{,.*}
+       peer=(name="{@{busname},org.gnome.Shell.Extensions{,.*},org.freedesktop.DBus}", label=gjs),
+  dbus send bus=session path=/org/gnome/Shell/Extensions{,/**}
+       interface=org.gnome.Shell.Extensions{,.*}
+       peer=(name="org.gnome.Shell.Extensions{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/gnome/Shell/Extensions{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gnome.Shell.Extensions{,.*},org.freedesktop.DBus}", label=gjs),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/gnome/Shell/Extensions{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gnome.Shell.Extensions{,.*},org.freedesktop.DBus}", label=gjs),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/gnome/Shell/Extensions{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.Shell.Extensions{,.*},org.freedesktop.DBus}", label=gjs),
+  dbus receive bus=session path=/org/gnome/Shell/Extensions{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gnome.Shell.Extensions{,.*},org.freedesktop.DBus}", label=gjs),
+
+
+  #aa/dbus talk bus=system name=com.ubuntu.WhoopsiePreferences label=whoopsie-preferences
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=whoopsie-preferences),
+  # com.ubuntu.WhoopsiePreferences: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/com/ubuntu/WhoopsiePreferences{,/**}
+       interface=com.ubuntu.WhoopsiePreferences{,.*}
+       peer=(name="{@{busname},com.ubuntu.WhoopsiePreferences{,.*},org.freedesktop.DBus}", label=whoopsie-preferences),
+  dbus send bus=system path=/com/ubuntu/WhoopsiePreferences{,/**}
+       interface=com.ubuntu.WhoopsiePreferences{,.*}
+       peer=(name="com.ubuntu.WhoopsiePreferences{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/com/ubuntu/WhoopsiePreferences{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},com.ubuntu.WhoopsiePreferences{,.*},org.freedesktop.DBus}", label=whoopsie-preferences),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/com/ubuntu/WhoopsiePreferences{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},com.ubuntu.WhoopsiePreferences{,.*},org.freedesktop.DBus}", label=whoopsie-preferences),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/com/ubuntu/WhoopsiePreferences{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},com.ubuntu.WhoopsiePreferences{,.*},org.freedesktop.DBus}", label=whoopsie-preferences),
+  dbus receive bus=system path=/com/ubuntu/WhoopsiePreferences{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},com.ubuntu.WhoopsiePreferences{,.*},org.freedesktop.DBus}", label=whoopsie-preferences),
+
+  #aa/dbus talk bus=system name=net.hadess.SwitcherooControl label=switcheroo-control
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=switcheroo-control),
+  # net.hadess.SwitcherooControl: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/net/hadess/SwitcherooControl{,/**}
+       interface=net.hadess.SwitcherooControl{,.*}
+       peer=(name="{@{busname},net.hadess.SwitcherooControl{,.*},org.freedesktop.DBus}", label=switcheroo-control),
+  dbus send bus=system path=/net/hadess/SwitcherooControl{,/**}
+       interface=net.hadess.SwitcherooControl{,.*}
+       peer=(name="net.hadess.SwitcherooControl{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/net/hadess/SwitcherooControl{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},net.hadess.SwitcherooControl{,.*},org.freedesktop.DBus}", label=switcheroo-control),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/net/hadess/SwitcherooControl{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},net.hadess.SwitcherooControl{,.*},org.freedesktop.DBus}", label=switcheroo-control),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/net/hadess/SwitcherooControl{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},net.hadess.SwitcherooControl{,.*},org.freedesktop.DBus}", label=switcheroo-control),
+  dbus receive bus=system path=/net/hadess/SwitcherooControl{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},net.hadess.SwitcherooControl{,.*},org.freedesktop.DBus}", label=switcheroo-control),
+
+  #aa/dbus talk bus=system name=net.reactivated.Fprint.Manager label="@{p_fprintd}"
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label="@{p_fprintd}"),
+  # net.reactivated.Fprint.Manager: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/net/reactivated/Fprint/Manager{,/**}
+       interface=net.reactivated.Fprint.Manager{,.*}
+       peer=(name="{@{busname},net.reactivated.Fprint.Manager{,.*},org.freedesktop.DBus}", label="@{p_fprintd}"),
+  dbus send bus=system path=/net/reactivated/Fprint/Manager{,/**}
+       interface=net.reactivated.Fprint.Manager{,.*}
+       peer=(name="net.reactivated.Fprint.Manager{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/net/reactivated/Fprint/Manager{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},net.reactivated.Fprint.Manager{,.*},org.freedesktop.DBus}", label="@{p_fprintd}"),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/net/reactivated/Fprint/Manager{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},net.reactivated.Fprint.Manager{,.*},org.freedesktop.DBus}", label="@{p_fprintd}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/net/reactivated/Fprint/Manager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},net.reactivated.Fprint.Manager{,.*},org.freedesktop.DBus}", label="@{p_fprintd}"),
+  dbus receive bus=system path=/net/reactivated/Fprint/Manager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},net.reactivated.Fprint.Manager{,.*},org.freedesktop.DBus}", label="@{p_fprintd}"),
+
+  #aa/dbus talk bus=system name=org.bluez label=bluetoothd
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=bluetoothd),
+  # org.bluez: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/bluez{,/**}
+       interface=org.bluez{,.*}
+       peer=(name="{@{busname},org.bluez{,.*},org.freedesktop.DBus}", label=bluetoothd),
+  dbus send bus=system path=/org/bluez{,/**}
+       interface=org.bluez{,.*}
+       peer=(name="org.bluez{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/bluez{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.bluez{,.*},org.freedesktop.DBus}", label=bluetoothd),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/bluez{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.bluez{,.*},org.freedesktop.DBus}", label=bluetoothd),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/bluez{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.bluez{,.*},org.freedesktop.DBus}", label=bluetoothd),
+  dbus receive bus=system path=/org/bluez{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.bluez{,.*},org.freedesktop.DBus}", label=bluetoothd),
+
+  #aa/dbus talk bus=system name=org.cups.cupsd.Notifier label=cups-notifier-dbus
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=cups-notifier-dbus),
+  # org.cups.cupsd.Notifier: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/cups/cupsd/Notifier{,/**}
+       interface=org.cups.cupsd.Notifier{,.*}
+       peer=(name="{@{busname},org.cups.cupsd.Notifier{,.*},org.freedesktop.DBus}", label=cups-notifier-dbus),
+  dbus send bus=system path=/org/cups/cupsd/Notifier{,/**}
+       interface=org.cups.cupsd.Notifier{,.*}
+       peer=(name="org.cups.cupsd.Notifier{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/cups/cupsd/Notifier{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.cups.cupsd.Notifier{,.*},org.freedesktop.DBus}", label=cups-notifier-dbus),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/cups/cupsd/Notifier{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.cups.cupsd.Notifier{,.*},org.freedesktop.DBus}", label=cups-notifier-dbus),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/cups/cupsd/Notifier{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.cups.cupsd.Notifier{,.*},org.freedesktop.DBus}", label=cups-notifier-dbus),
+  dbus receive bus=system path=/org/cups/cupsd/Notifier{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.cups.cupsd.Notifier{,.*},org.freedesktop.DBus}", label=cups-notifier-dbus),
+
+  #aa/dbus talk bus=system name=org.freedesktop.Accounts label="@{p_accounts_daemon}"
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label="@{p_accounts_daemon}"),
+  # org.freedesktop.Accounts: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/Accounts{,/**}
+       interface=org.freedesktop.Accounts{,.*}
+       peer=(name="{@{busname},org.freedesktop.Accounts{,.*},org.freedesktop.DBus}", label="@{p_accounts_daemon}"),
+  dbus send bus=system path=/org/freedesktop/Accounts{,/**}
+       interface=org.freedesktop.Accounts{,.*}
+       peer=(name="org.freedesktop.Accounts{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/Accounts{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.Accounts{,.*},org.freedesktop.DBus}", label="@{p_accounts_daemon}"),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/Accounts{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.Accounts{,.*},org.freedesktop.DBus}", label="@{p_accounts_daemon}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/Accounts{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.Accounts{,.*},org.freedesktop.DBus}", label="@{p_accounts_daemon}"),
+  dbus receive bus=system path=/org/freedesktop/Accounts{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.Accounts{,.*},org.freedesktop.DBus}", label="@{p_accounts_daemon}"),
+
+  #aa/dbus talk bus=system name=org.freedesktop.bolt1 path=/org/freedesktop/bolt{,/**} label=boltd
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=boltd),
+  # org.freedesktop.bolt1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/bolt{,/**}
+       interface=org.freedesktop.bolt1{,.*}
+       peer=(name="{@{busname},org.freedesktop.bolt1{,.*},org.freedesktop.DBus}", label=boltd),
+  dbus send bus=system path=/org/freedesktop/bolt{,/**}
+       interface=org.freedesktop.bolt1{,.*}
+       peer=(name="org.freedesktop.bolt1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/bolt{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.bolt1{,.*},org.freedesktop.DBus}", label=boltd),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/bolt{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.bolt1{,.*},org.freedesktop.DBus}", label=boltd),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/bolt{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.bolt1{,.*},org.freedesktop.DBus}", label=boltd),
+  dbus receive bus=system path=/org/freedesktop/bolt{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.bolt1{,.*},org.freedesktop.DBus}", label=boltd),
+
+  #aa/dbus talk bus=system name=org.freedesktop.ColorManager label=colord
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=colord),
+  # org.freedesktop.ColorManager: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/ColorManager{,/**}
+       interface=org.freedesktop.ColorManager{,.*}
+       peer=(name="{@{busname},org.freedesktop.ColorManager{,.*},org.freedesktop.DBus}", label=colord),
+  dbus send bus=system path=/org/freedesktop/ColorManager{,/**}
+       interface=org.freedesktop.ColorManager{,.*}
+       peer=(name="org.freedesktop.ColorManager{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/ColorManager{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.ColorManager{,.*},org.freedesktop.DBus}", label=colord),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/ColorManager{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.ColorManager{,.*},org.freedesktop.DBus}", label=colord),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/ColorManager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.ColorManager{,.*},org.freedesktop.DBus}", label=colord),
+  dbus receive bus=system path=/org/freedesktop/ColorManager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.ColorManager{,.*},org.freedesktop.DBus}", label=colord),
+
+  #aa/dbus talk bus=system name=org.freedesktop.fwupd path=/ label=fwupd
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=fwupd),
+  # org.freedesktop.fwupd: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/
+       interface=org.freedesktop.fwupd{,.*}
+       peer=(name="{@{busname},org.freedesktop.fwupd{,.*},org.freedesktop.DBus}", label=fwupd),
+  dbus send bus=system path=/
+       interface=org.freedesktop.fwupd{,.*}
+       peer=(name="org.freedesktop.fwupd{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.fwupd{,.*},org.freedesktop.DBus}", label=fwupd),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.fwupd{,.*},org.freedesktop.DBus}", label=fwupd),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.fwupd{,.*},org.freedesktop.DBus}", label=fwupd),
+  dbus receive bus=system path=/
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.fwupd{,.*},org.freedesktop.DBus}", label=fwupd),
+
+  #aa/dbus talk bus=system name=org.freedesktop.hostname1 label="@{p_systemd_hostnamed}"
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label="@{p_systemd_hostnamed}"),
+  # org.freedesktop.hostname1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/hostname1{,/**}
+       interface=org.freedesktop.hostname1{,.*}
+       peer=(name="{@{busname},org.freedesktop.hostname1{,.*},org.freedesktop.DBus}", label="@{p_systemd_hostnamed}"),
+  dbus send bus=system path=/org/freedesktop/hostname1{,/**}
+       interface=org.freedesktop.hostname1{,.*}
+       peer=(name="org.freedesktop.hostname1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/hostname1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.hostname1{,.*},org.freedesktop.DBus}", label="@{p_systemd_hostnamed}"),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/hostname1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.hostname1{,.*},org.freedesktop.DBus}", label="@{p_systemd_hostnamed}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/hostname1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.hostname1{,.*},org.freedesktop.DBus}", label="@{p_systemd_hostnamed}"),
+  dbus receive bus=system path=/org/freedesktop/hostname1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.hostname1{,.*},org.freedesktop.DBus}", label="@{p_systemd_hostnamed}"),
+
+  #aa/dbus talk bus=system name=org.freedesktop.locale1 label=label=systemd-localed
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=label),
+  # org.freedesktop.locale1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/locale1{,/**}
+       interface=org.freedesktop.locale1{,.*}
+       peer=(name="{@{busname},org.freedesktop.locale1{,.*},org.freedesktop.DBus}", label=label),
+  dbus send bus=system path=/org/freedesktop/locale1{,/**}
+       interface=org.freedesktop.locale1{,.*}
+       peer=(name="org.freedesktop.locale1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/locale1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.locale1{,.*},org.freedesktop.DBus}", label=label),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/locale1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.locale1{,.*},org.freedesktop.DBus}", label=label),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/locale1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.locale1{,.*},org.freedesktop.DBus}", label=label),
+  dbus receive bus=system path=/org/freedesktop/locale1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.locale1{,.*},org.freedesktop.DBus}", label=label),
+
+  #aa/dbus talk bus=system name=org.freedesktop.login1 label="@{p_systemd_logind}"
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label="@{p_systemd_logind}"),
+  # org.freedesktop.login1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.login1{,.*}
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label="@{p_systemd_logind}"),
+  dbus send bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.login1{,.*}
+       peer=(name="org.freedesktop.login1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label="@{p_systemd_logind}"),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label="@{p_systemd_logind}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label="@{p_systemd_logind}"),
+  dbus receive bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label="@{p_systemd_logind}"),
+
+  #aa/dbus talk bus=system name=org.freedesktop.ModemManager1 label="@{p_ModemManager}"
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label="@{p_ModemManager}"),
+  # org.freedesktop.ModemManager1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/ModemManager1{,/**}
+       interface=org.freedesktop.ModemManager1{,.*}
+       peer=(name="{@{busname},org.freedesktop.ModemManager1{,.*},org.freedesktop.DBus}", label="@{p_ModemManager}"),
+  dbus send bus=system path=/org/freedesktop/ModemManager1{,/**}
+       interface=org.freedesktop.ModemManager1{,.*}
+       peer=(name="org.freedesktop.ModemManager1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/ModemManager1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.ModemManager1{,.*},org.freedesktop.DBus}", label="@{p_ModemManager}"),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/ModemManager1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.ModemManager1{,.*},org.freedesktop.DBus}", label="@{p_ModemManager}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/ModemManager1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.ModemManager1{,.*},org.freedesktop.DBus}", label="@{p_ModemManager}"),
+  dbus receive bus=system path=/org/freedesktop/ModemManager1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.ModemManager1{,.*},org.freedesktop.DBus}", label="@{p_ModemManager}"),
+
+  #aa/dbus talk bus=system name=org.freedesktop.NetworkManager label=NetworkManager
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=NetworkManager),
+  # org.freedesktop.NetworkManager: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/NetworkManager{,/**}
+       interface=org.freedesktop.NetworkManager{,.*}
+       peer=(name="{@{busname},org.freedesktop.NetworkManager{,.*},org.freedesktop.DBus}", label=NetworkManager),
+  dbus send bus=system path=/org/freedesktop/NetworkManager{,/**}
+       interface=org.freedesktop.NetworkManager{,.*}
+       peer=(name="org.freedesktop.NetworkManager{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/NetworkManager{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.NetworkManager{,.*},org.freedesktop.DBus}", label=NetworkManager),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/NetworkManager{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.NetworkManager{,.*},org.freedesktop.DBus}", label=NetworkManager),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/NetworkManager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.NetworkManager{,.*},org.freedesktop.DBus}", label=NetworkManager),
+  dbus receive bus=system path=/org/freedesktop/NetworkManager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.NetworkManager{,.*},org.freedesktop.DBus}", label=NetworkManager),
+
+  #aa/dbus talk bus=system name=org.freedesktop.PolicyKit1 label="@{p_polkitd}"
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label="@{p_polkitd}"),
+  # org.freedesktop.PolicyKit1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/PolicyKit1{,/**}
+       interface=org.freedesktop.PolicyKit1{,.*}
+       peer=(name="{@{busname},org.freedesktop.PolicyKit1{,.*},org.freedesktop.DBus}", label="@{p_polkitd}"),
+  dbus send bus=system path=/org/freedesktop/PolicyKit1{,/**}
+       interface=org.freedesktop.PolicyKit1{,.*}
+       peer=(name="org.freedesktop.PolicyKit1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/PolicyKit1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.PolicyKit1{,.*},org.freedesktop.DBus}", label="@{p_polkitd}"),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/PolicyKit1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.PolicyKit1{,.*},org.freedesktop.DBus}", label="@{p_polkitd}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/PolicyKit1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.PolicyKit1{,.*},org.freedesktop.DBus}", label="@{p_polkitd}"),
+  dbus receive bus=system path=/org/freedesktop/PolicyKit1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.PolicyKit1{,.*},org.freedesktop.DBus}", label="@{p_polkitd}"),
+
+  #aa/dbus talk bus=system name=org.freedesktop.systemd1 label="@{p_systemd}"
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label="@{p_systemd}"),
+  # org.freedesktop.systemd1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.systemd1{,.*}
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label="@{p_systemd}"),
+  dbus send bus=system path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.systemd1{,.*}
+       peer=(name="org.freedesktop.systemd1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label="@{p_systemd}"),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label="@{p_systemd}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label="@{p_systemd}"),
+  dbus receive bus=system path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label="@{p_systemd}"),
+
+  #aa/dbus talk bus=system name=org.freedesktop.timedate1 label=systemd-timedated
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=systemd-timedated),
+  # org.freedesktop.timedate1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/timedate1{,/**}
+       interface=org.freedesktop.timedate1{,.*}
+       peer=(name="{@{busname},org.freedesktop.timedate1{,.*},org.freedesktop.DBus}", label=systemd-timedated),
+  dbus send bus=system path=/org/freedesktop/timedate1{,/**}
+       interface=org.freedesktop.timedate1{,.*}
+       peer=(name="org.freedesktop.timedate1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/timedate1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.timedate1{,.*},org.freedesktop.DBus}", label=systemd-timedated),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/timedate1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.timedate1{,.*},org.freedesktop.DBus}", label=systemd-timedated),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/timedate1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.timedate1{,.*},org.freedesktop.DBus}", label=systemd-timedated),
+  dbus receive bus=system path=/org/freedesktop/timedate1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.timedate1{,.*},org.freedesktop.DBus}", label=systemd-timedated),
+
+  #aa/dbus talk bus=system name=org.freedesktop.UDisks2 label=udisksd
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=udisksd),
+  # org.freedesktop.UDisks2: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/UDisks2{,/**}
+       interface=org.freedesktop.UDisks2{,.*}
+       peer=(name="{@{busname},org.freedesktop.UDisks2{,.*},org.freedesktop.DBus}", label=udisksd),
+  dbus send bus=system path=/org/freedesktop/UDisks2{,/**}
+       interface=org.freedesktop.UDisks2{,.*}
+       peer=(name="org.freedesktop.UDisks2{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/UDisks2{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.UDisks2{,.*},org.freedesktop.DBus}", label=udisksd),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/UDisks2{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.UDisks2{,.*},org.freedesktop.DBus}", label=udisksd),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/UDisks2{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.UDisks2{,.*},org.freedesktop.DBus}", label=udisksd),
+  dbus receive bus=system path=/org/freedesktop/UDisks2{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.UDisks2{,.*},org.freedesktop.DBus}", label=udisksd),
+
+  #aa/dbus talk bus=system name=org.freedesktop.UPower label="@{p_upowerd}"
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label="@{p_upowerd}"),
+  # org.freedesktop.UPower: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/UPower{,/**}
+       interface=org.freedesktop.UPower{,.*}
+       peer=(name="{@{busname},org.freedesktop.UPower{,.*},org.freedesktop.DBus}", label="@{p_upowerd}"),
+  dbus send bus=system path=/org/freedesktop/UPower{,/**}
+       interface=org.freedesktop.UPower{,.*}
+       peer=(name="org.freedesktop.UPower{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/UPower{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.UPower{,.*},org.freedesktop.DBus}", label="@{p_upowerd}"),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/UPower{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.UPower{,.*},org.freedesktop.DBus}", label="@{p_upowerd}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/UPower{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.UPower{,.*},org.freedesktop.DBus}", label="@{p_upowerd}"),
+  dbus receive bus=system path=/org/freedesktop/UPower{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.UPower{,.*},org.freedesktop.DBus}", label="@{p_upowerd}"),
+
+  #aa/dbus talk bus=system name=org.freedesktop.UPower.PowerProfiles label=@{p_power_profiles_daemon}
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=@{p_power_profiles_daemon}),
+  # org.freedesktop.UPower.PowerProfiles: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/UPower/PowerProfiles{,/**}
+       interface=org.freedesktop.UPower.PowerProfiles{,.*}
+       peer=(name="{@{busname},org.freedesktop.UPower.PowerProfiles{,.*},org.freedesktop.DBus}", label=@{p_power_profiles_daemon}),
+  dbus send bus=system path=/org/freedesktop/UPower/PowerProfiles{,/**}
+       interface=org.freedesktop.UPower.PowerProfiles{,.*}
+       peer=(name="org.freedesktop.UPower.PowerProfiles{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/UPower/PowerProfiles{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.UPower.PowerProfiles{,.*},org.freedesktop.DBus}", label=@{p_power_profiles_daemon}),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/UPower/PowerProfiles{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.UPower.PowerProfiles{,.*},org.freedesktop.DBus}", label=@{p_power_profiles_daemon}),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/UPower/PowerProfiles{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.UPower.PowerProfiles{,.*},org.freedesktop.DBus}", label=@{p_power_profiles_daemon}),
+  dbus receive bus=system path=/org/freedesktop/UPower/PowerProfiles{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.UPower.PowerProfiles{,.*},org.freedesktop.DBus}", label=@{p_power_profiles_daemon}),
+
+  #aa/dbus talk bus=system name=org.opensuse.CupsPkHelper.Mechanism label=cups-pk-helper-mechanism
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=cups-pk-helper-mechanism),
+  # org.opensuse.CupsPkHelper.Mechanism: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/opensuse/CupsPkHelper/Mechanism{,/**}
+       interface=org.opensuse.CupsPkHelper.Mechanism{,.*}
+       peer=(name="{@{busname},org.opensuse.CupsPkHelper.Mechanism{,.*},org.freedesktop.DBus}", label=cups-pk-helper-mechanism),
+  dbus send bus=system path=/org/opensuse/CupsPkHelper/Mechanism{,/**}
+       interface=org.opensuse.CupsPkHelper.Mechanism{,.*}
+       peer=(name="org.opensuse.CupsPkHelper.Mechanism{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/opensuse/CupsPkHelper/Mechanism{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.opensuse.CupsPkHelper.Mechanism{,.*},org.freedesktop.DBus}", label=cups-pk-helper-mechanism),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/opensuse/CupsPkHelper/Mechanism{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.opensuse.CupsPkHelper.Mechanism{,.*},org.freedesktop.DBus}", label=cups-pk-helper-mechanism),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/opensuse/CupsPkHelper/Mechanism{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.opensuse.CupsPkHelper.Mechanism{,.*},org.freedesktop.DBus}", label=cups-pk-helper-mechanism),
+  dbus receive bus=system path=/org/opensuse/CupsPkHelper/Mechanism{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.opensuse.CupsPkHelper.Mechanism{,.*},org.freedesktop.DBus}", label=cups-pk-helper-mechanism),
+
+
+  # Get new/old interfaces signals from any other services
+  dbus send bus=system path=/{,org/freedesktop}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name=@{busname}),
+  dbus receive bus=system path=/{,org/freedesktop}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name=@{busname}),
+
+  dbus receive bus=system path=/org/gnome/bluetooth/settings
+       interface=org.bluez.Agent1
+       member=Release
+       peer=(name=@{busname}, label=bluetoothd),
+
+  @{exec_path} mr,
+
+  @{bin}/@{shells}     rux,
+
+  @{bin}/gcm-viewer    rix,
+  @{bin}/{,e}grep      rix,
+  @{bin}/locale        rix,
+  @{bin}/sed           rix,
+  @{bin}/tecla         rpx,
+
+  # glycin
+  @{bin}/gkbd-keyboard-display                   rpx,
+  @{bin}/gnome-software                          rpx,
+  @{bin}/lscpu                                   rpx,
+  @{bin}/passwd                                  rpx,
+  @{bin}/pkexec                                  rcx -> pkexec,
+  @{bin}/software-properties-gtk                 rpx,
+  @{bin}/update-manager                          rpx,
+  @{lib}/{,@{multiarch}/}webkit{2,}gtk-*/WebKitNetworkProcess rix,
+  @{lib}/cups/backend/snmp                       rpx,
+  @{lib}/gnome-control-center-goa-helper         rpx,
+  @{lib}/gnome-control-center-print-renderer     rpx,
+  @{sbin}/openvpn                                rpx,
+  @{sbin}/usermod                                rpx,
+  /usr/share/language-tools/language2locale      rix,
+  /usr/share/language-tools/language-options    rpux,
+
+  @{open_path}                                   rpx -> child-open-any,
+
+  /snap/*/@{int}/**.@{icon_ext} r,
+  /usr/share/backgrounds/{,**} r,
+  /usr/share/cups/data/testprint r,
+  /usr/share/firefox{,-esr}/browser/chrome/icons/{,**} r,
+  /usr/share/gnome-background-properties/{,**} r,
+  /usr/share/gnome-bluetooth{-*,}/{,**} r,
+  /usr/share/gnome-color-manager/{,**} r,
+  /usr/share/gnome-control-center/{,**} r,
+  /usr/share/gnome-shell/search-providers/{,**} r,
+  /usr/share/gnome/gnome-version.xml r,
+  /usr/share/language-tools/main-countries r,
+  /usr/share/publicsuffix/{,**} r,
+  /usr/share/thumbnailers/{,*} r,
+  /usr/share/wallpapers/{,**} r,
+  /usr/share/xml/iso-codes/{,**} r,
+
+  @{etc_ro}/security/pwquality.conf r,
+  @{etc_ro}/security/pwquality.conf.d/{,**} r,
+  /etc/machine-info r,
+  /etc/rygel.conf r,
+  /etc/xdg/autostart/ r,
+  /etc/xdg/autostart/*.desktop r,
+
+  /etc/fstab r,
+
+  /var/cache/cracklib/cracklib_dict.* r,
+  /var/cache/samba/ rw,
+  /var/lib/AccountsService/icons/* r,
+
+  /usr/share/snapd/*.svg r,
+
+  / r,
+
+  owner @{HOME}/.cat_installer/ca.pem r,
+  owner @{HOME}/.cert/nm-openvpn/*.pem r,
+  owner @{HOME}/.face r,
+  owner @{HOME}/@{XDG_WALLPAPERS_DIR}/{,**} r,
+
+  owner @{user_cache_dirs}/gnome-control-center/{,**} rw,
+  owner @{user_cache_dirs}/thumbnails/fail/gnome-thumbnail-factory/@{hex32}.png.@{rand6} rw,
+
+  owner @{user_config_dirs}/background rw,
+  owner @{user_config_dirs}/gnome-control-center/{,**} rw,
+  owner @{user_config_dirs}/ibus/bus/ r,
+  owner @{user_config_dirs}/ibus/bus/@{hex32}-unix-{,wayland-}@{int} r,
+  owner @{user_config_dirs}/mimeapps.list w,
+  owner @{user_config_dirs}/mimeapps.list.@{rand6} rw,
+  owner @{user_config_dirs}/rygel.conf{,.@{rand6}} rw,
+
+        @{system_games_dirs}/**.@{icon_ext} r,
+  owner @{user_games_dirs}/**.@{icon_ext} r,
+
+  owner @{user_share_dirs}/backgrounds/{,**} rw,
+  owner @{user_share_dirs}/gnome-remote-desktop/ w,
+  owner @{user_share_dirs}/gnome-remote-desktop/rdp-tls.{crt,key}{,.@{rand6}} rw,
+  owner @{user_share_dirs}/gnome-shell/session-active-history.json r,
+  owner @{user_share_dirs}/icc/{,edid-*} r,
+
+  owner @{tmp}/@{hex12}@{h} rw,
+  owner @{tmp}/@{rand8} rw,
+  owner @{tmp}/gdkpixbuf-xpm-tmp.@{rand6} rw,
+
+        @{run}/samba/ rw,
+        @{run}/systemd/sessions/  r,
+        @{run}/systemd/sessions/* r,
+        @{run}/systemd/users/@{uid} r,
+  owner @{run}/user/@{uid}/gnome-control-center-region-needs-restart w,
+  owner @{run}/user/@{uid}/gnome-shell-disable-extensions w,
+  owner @{run}/user/@{uid}/gvfsd/socket-@{rand8} rw,
+
+  @{run}/udev/data/+dmi:* r,              # for motherboard info
+  @{run}/udev/data/+input:input@{int} r,  # for mouse, keyboard, touchpad
+  @{run}/udev/data/+pci:* r,              # Identifies all PCI devices (CPU, GPU, Network, Disks, USB, etc.)
+  @{run}/udev/data/c13:@{int} r,          # for /dev/input/*
+  @{run}/udev/data/c@{dynamic}:@{int} r,  # For dynamic assignment range 234 to 254, 384 to 511
+  @{run}/udev/data/n@{int} r,             # For network interfaces
+
+  @{sys}/bus/ r,
+  @{sys}/class/ r,
+  @{sys}/class/input/ r,
+  @{sys}/devices/**/{name,vendor,product,uevent} r,
+  @{sys}/devices/**/power_supply/{,**} r,
+  @{sys}/devices/platform/**/uevent r,
+  @{sys}/devices/virtual/**/uevent r,
+  @{sys}/devices/virtual/dmi/id/chassis_type r,
+  @{sys}/devices/virtual/thermal/thermal_zone@{int}/hwmon@{int}/temp* r,
+  @{sys}/firmware/acpi/pm_profile r,
+
+  owner @{sys}/fs/cgroup/user.slice/user-@{uid}.slice/user@@{uid}.service/{,**} rw,
+
+        @{PROC}/cmdline r,
+        @{PROC}/sys/net/ipv6/conf/all/disable_ipv6 r,
+        @{PROC}/zoneinfo r,
+        @{PROC}/1/cgroup r,
+  owner @{PROC}/@{pid}/cgroup r,
+  owner @{PROC}/@{pid}/cmdline r,
+  owner @{PROC}/@{pid}/fd/ r,
+  owner @{PROC}/@{pid}/fdinfo/@{int} r,
+  owner @{PROC}/@{pid}/loginuid r,
+  owner @{PROC}/@{pid}/mountinfo r,
+  owner @{PROC}/@{pid}/stat r,
+  owner @{PROC}/@{pid}/statm r,
+  owner @{PROC}/@{pid}/task/*/comm rw,
+
+  /dev/ r,
+
+  profile pkexec flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/app/pkexec>
+
+    include if exists <local/gnome-control-center_pkexec>
+  }
+
+  include if exists <local/gnome-control-center>
+}
+
+# vim:syntax=apparmor

@@ -1,0 +1,92 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/gsd-printer
+@{att} = /att/gsd-printer/
+profile gsd-printer /{,usr/}lib{,exec,32,64}/gsd-printer flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-session>
+  include <abstractions/bus-system>
+  include <abstractions/attached/consoles>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/session-manager>
+
+  signal (receive) set=(term, hup) peer=gdm*,
+  signal (receive) set=(hup) peer=gsd-print-notifications,
+
+  #aa/dbus own bus=system name=com.redhat.NewPrinterNotification
+  include <abstractions/bus/system/own>
+  dbus bind bus=system name=com.redhat.NewPrinterNotification{,.*},
+  dbus receive bus=system path=/com/redhat/NewPrinterNotification{,/**}
+       interface=com.redhat.NewPrinterNotification{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=system path=/com/redhat/NewPrinterNotification{,/**}
+       interface=com.redhat.NewPrinterNotification{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=system path=/com/redhat/NewPrinterNotification{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=system path=/com/redhat/NewPrinterNotification{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=system path=/com/redhat/NewPrinterNotification{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},com.redhat.NewPrinterNotification{,.*}}"),
+  dbus send bus=system path=/com/redhat/NewPrinterNotification{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=system name=com.redhat.PrinterDriversInstaller
+  dbus bind bus=system name=com.redhat.PrinterDriversInstaller{,.*},
+  dbus receive bus=system path=/com/redhat/PrinterDriversInstaller{,/**}
+       interface=com.redhat.PrinterDriversInstaller{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=system path=/com/redhat/PrinterDriversInstaller{,/**}
+       interface=com.redhat.PrinterDriversInstaller{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=system path=/com/redhat/PrinterDriversInstaller{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=system path=/com/redhat/PrinterDriversInstaller{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=system path=/com/redhat/PrinterDriversInstaller{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},com.redhat.PrinterDriversInstaller{,.*}}"),
+  dbus send bus=system path=/com/redhat/PrinterDriversInstaller{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  dbus receive bus=session
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name=@{busname}, label="{gnome-shell,gnome-extension}"),
+
+  @{exec_path} mr,
+
+  owner @{PROC}/@{pid}/cgroup r,
+
+  include if exists <local/gsd-printer>
+}
+
+# vim:syntax=apparmor

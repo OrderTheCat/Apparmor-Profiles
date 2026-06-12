@@ -1,0 +1,27 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+# Allows access to all cameras
+
+  abi <abi/4.0>,
+
+  include <abstractions/devices-usb-read>
+
+  @{run}/udev/data/c81:@{int}  r,         # For video4linux
+
+  @{sys}/class/video4linux/ r,
+  @{sys}/devices/**/video4linux/video@{int}/ r,
+  @{sys}/devices/**/video4linux/video@{int}/uevent r,
+
+  /dev/ r,
+
+  # VideoCore cameras (shared device with VideoCore/EGL)
+  /dev/vchiq rw,
+
+  # Access to video /dev devices
+  /dev/video@{int} rw,
+
+  include if exists <abstractions/camera.d>
+
+# vim:syntax=apparmor

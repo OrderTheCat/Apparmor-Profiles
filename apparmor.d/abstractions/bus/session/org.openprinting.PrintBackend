@@ -1,0 +1,67 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+  abi <abi/4.0>,
+
+  #aa/dbus see bus=session name=org.openprinting.PrintBackend path=/ label=print-backends-cups
+
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=print-backends-cups),
+
+  # DBus.Properties: read all properties from the interface
+
+  dbus send bus=session path=/
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll}
+       peer=(name="{@{busname},org.openprinting.PrintBackend{,.*}}", label=print-backends-cups),
+
+  # DBus.Properties: receive property changed events
+
+  dbus receive bus=session path=/
+       interface=org.freedesktop.DBus.Properties
+       member=PropertiesChanged
+       peer=(name="{@{busname},org.openprinting.PrintBackend{,.*}}", label=print-backends-cups),
+
+  # DBus.Introspectable: allow service introspection
+
+  dbus send bus=session path=/
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.openprinting.PrintBackend{,.*}}", label=print-backends-cups),
+
+  # openprinting.PrintBackend
+
+  dbus send bus=session path=/
+       interface=org.openprinting.PrintBackend
+       member={GetAllOptions,GetAllPrinters}
+       peer=(name=@{busname}, label=print-backends-cups),
+
+  dbus send bus=session path=/
+       interface=org.openprinting.PrintBackend
+       member={getChoiceTranslation,getDefaultPrinter,getPrinterState}
+       peer=(name=@{busname}, label=print-backends-cups),
+
+  dbus send bus=session path=/
+       interface=org.openprinting.PrintBackend
+       member={getGroupTranslation,getOptionTranslation}
+       peer=(name=@{busname}, label=print-backends-cups),
+
+  dbus send bus=session path=/
+       interface=org.openprinting.PrintBackend
+       member=isAcceptingJobs
+       peer=(name=@{busname}, label=print-backends-cups),
+
+  dbus send bus=session path=/
+       interface=org.openprinting.PrintBackend
+       member=printSocket
+       peer=(name=@{busname}, label=print-backends-cups),
+
+  dbus send bus=session path=/
+       interface=org.openprinting.PrintBackend
+       member=doListing
+       peer=(name=@{busname}, label=print-backends-cups),
+
+  include if exists <abstractions/bus/session/org.openprinting.PrintBackend.d>
+
+# vim:syntax=apparmor

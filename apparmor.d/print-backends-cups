@@ -1,0 +1,99 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/@{multiarch}/print-backends/cups
+@{att} = ""
+profile print-backends-cups /{,usr/}lib{,exec,32,64}/*-linux-gnu*/print-backends/cups flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/avahi-observe>
+  include <abstractions/bus-session>
+  include <abstractions/bus-system>
+  include <abstractions/bus/system/org.cups.cupsd.Notifier>
+  include <abstractions/cups-client>
+  include <abstractions/nameservice-strict>
+
+  network inet stream,
+  network inet6 stream,
+
+  #aa/dbus own bus=session name=org.openprinting.Backend.CUPS
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.openprinting.Backend.CUPS{,.*},
+  dbus receive bus=session path=/org/openprinting/Backend/CUPS{,/**}
+       interface=org.openprinting.Backend.CUPS{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/openprinting/Backend/CUPS{,/**}
+       interface=org.openprinting.Backend.CUPS{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/openprinting/Backend/CUPS{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/openprinting/Backend/CUPS{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/openprinting/Backend/CUPS{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.openprinting.Backend.CUPS{,.*}}"),
+  dbus send bus=session path=/org/openprinting/Backend/CUPS{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=session name=org.openprinting.PrintBackend path=/{,**}
+  dbus bind bus=session name=org.openprinting.PrintBackend{,.*},
+  dbus receive bus=session path=/{,**}
+       interface=org.openprinting.PrintBackend{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/{,**}
+       interface=org.openprinting.PrintBackend{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/{,**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/{,**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/{,**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.openprinting.PrintBackend{,.*}}"),
+  dbus send bus=session path=/{,**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  @{exec_path} mr,
+
+  @{sh_path} rix,
+  @{bin}/mkdir ix,
+
+  /usr/share/cups/locale/{,**} r,
+
+        /home/ r,
+  owner @{HOME}/ r,
+  owner @{HOME}/cpdb/ rw,
+  owner @{HOME}/cpdb/sockets/ rw,
+  owner @{HOME}/cpdb/sockets/cups-@{int}.sock rw,
+
+  owner /tmp/@{rand} rw,
+
+  include if exists <local/print-backends-cups>
+}
+
+# vim:syntax=apparmor

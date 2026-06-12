@@ -1,0 +1,199 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/kwin_x11
+@{att} = ""
+profile kwin_x11 /{,usr/}bin/kwin_x11 flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/audio-client>
+  include <abstractions/bus-session>
+  include <abstractions/graphics>
+  include <abstractions/kde-strict>
+  include <abstractions/nameservice-strict>
+  include <abstractions/qt5-shader-cache>
+  include <abstractions/thumbnails-cache-read>
+
+  network inet dgram,
+  network inet6 dgram,
+  network inet stream,
+  network inet6 stream,
+  network netlink raw,
+
+  #aa/dbus own bus=session name=org.kde.KWin
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.kde.KWin{,.*},
+  dbus receive bus=session path=/org/kde/KWin{,/**}
+       interface=org.kde.KWin{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/kde/KWin{,/**}
+       interface=org.kde.KWin{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/kde/KWin{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/kde/KWin{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/kde/KWin{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.kde.KWin{,.*}}"),
+  dbus send bus=session path=/org/kde/KWin{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=session name=org.kde.NightColor path=/ColorCorrect
+  dbus bind bus=session name=org.kde.NightColor{,.*},
+  dbus receive bus=session path=/ColorCorrect
+       interface=org.kde.NightColor{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/ColorCorrect
+       interface=org.kde.NightColor{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/ColorCorrect
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/ColorCorrect
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/ColorCorrect
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.kde.NightColor{,.*}}"),
+  dbus send bus=session path=/ColorCorrect
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  #aa/dbus talk bus=session name=org.kde.ActivityManager label=kactivitymanagerd
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=kactivitymanagerd),
+  # org.kde.ActivityManager: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/kde/ActivityManager{,/**}
+       interface=org.kde.ActivityManager{,.*}
+       peer=(name="{@{busname},org.kde.ActivityManager{,.*},org.freedesktop.DBus}", label=kactivitymanagerd),
+  dbus send bus=session path=/org/kde/ActivityManager{,/**}
+       interface=org.kde.ActivityManager{,.*}
+       peer=(name="org.kde.ActivityManager{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/kde/ActivityManager{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.kde.ActivityManager{,.*},org.freedesktop.DBus}", label=kactivitymanagerd),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/kde/ActivityManager{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.kde.ActivityManager{,.*},org.freedesktop.DBus}", label=kactivitymanagerd),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/kde/ActivityManager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.kde.ActivityManager{,.*},org.freedesktop.DBus}", label=kactivitymanagerd),
+  dbus receive bus=session path=/org/kde/ActivityManager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.kde.ActivityManager{,.*},org.freedesktop.DBus}", label=kactivitymanagerd),
+
+  #aa/dbus talk bus=session name=org.kde.KGlobalAccel path=/kglobalaccel label=kglobalacceld
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=kglobalacceld),
+  # org.kde.KGlobalAccel: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/kglobalaccel
+       interface=org.kde.KGlobalAccel{,.*}
+       peer=(name="{@{busname},org.kde.KGlobalAccel{,.*},org.freedesktop.DBus}", label=kglobalacceld),
+  dbus send bus=session path=/kglobalaccel
+       interface=org.kde.KGlobalAccel{,.*}
+       peer=(name="org.kde.KGlobalAccel{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/kglobalaccel
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.kde.KGlobalAccel{,.*},org.freedesktop.DBus}", label=kglobalacceld),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/kglobalaccel
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.kde.KGlobalAccel{,.*},org.freedesktop.DBus}", label=kglobalacceld),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/kglobalaccel
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.kde.KGlobalAccel{,.*},org.freedesktop.DBus}", label=kglobalacceld),
+  dbus receive bus=session path=/kglobalaccel
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.kde.KGlobalAccel{,.*},org.freedesktop.DBus}", label=kglobalacceld),
+
+
+  @{exec_path} mrix,
+
+  @{sh_path}                 rix,
+  @{bin}/kdialog             rix,
+  @{lib}/kwin_killer_helper  rix,
+  @{bin}/ r,
+
+  /{,usr/}lib{,exec,32,64}/*-linux-gnu*/{,libexec/}drkonqi Px,
+  /{,usr/}lib{,exec,32,64}/drkonqi Px,
+
+  /usr/share/kwin-x11/{,**} r,
+  /usr/share/kwin/{,**} r,
+  /usr/share/plasma/desktoptheme/{,**} r,
+
+  /etc/machine-id r,
+  /etc/xdg/plasmarc r,
+
+  owner @{user_cache_dirs}/ r,
+  owner @{user_cache_dirs}/kcrash-metadata/*.ini rw,
+  owner @{user_cache_dirs}/ksvg-elements r,
+  owner @{user_cache_dirs}/kwin/{,**} rwl,
+  owner @{user_cache_dirs}/plasma_theme_*.kcache rw,
+  owner @{user_cache_dirs}/plasma-svgelements rw,
+  owner @{user_cache_dirs}/plasma-svgelements.@{rand6} rwl -> @{user_cache_dirs}/#@{int},
+  owner @{user_cache_dirs}/plasma-svgelements.lock rwk,
+  owner @{user_cache_dirs}/plasmarc r,
+  owner @{user_cache_dirs}/session/#@{int} rw,
+
+  owner @{user_config_dirs}/#@{int} rw,
+  owner @{user_config_dirs}/kaccessrc r,
+  owner @{user_config_dirs}/kdedefaults/plasmarc r,
+  owner @{user_config_dirs}/kwinoutputconfig.json rw,
+  owner @{user_config_dirs}/kwinrc.lock rwk,
+  owner @{user_config_dirs}/kwinrc{,.@{rand6}} rwl,
+  owner @{user_config_dirs}/kwinrulesrc r,
+  owner @{user_config_dirs}/kxkbrc r,
+  owner @{user_config_dirs}/plasmarc r,
+
+  owner @{user_share_dirs}/kwin/scripts/ r,
+
+  owner @{tmp}/#@{int} rw,
+  owner @{tmp}/kwin.@{rand6} rwl,
+
+  owner @{run}/user/@{uid}/kcrash_@{int} rw,
+
+  @{sys}/devices/system/node/ r,
+  @{sys}/devices/system/node/node@{int}/meminfo r,
+
+  /dev/tty rw,
+
+  include if exists <local/kwin_x11>
+}
+
+# vim:syntax=apparmor

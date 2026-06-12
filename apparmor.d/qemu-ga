@@ -1,0 +1,82 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{sbin}/qemu-ga @{bin}/qemu-ga  #aa:lint ignore=sbin
+@{att} = /att/qemu-ga/
+profile qemu-ga /{{,usr/}{,s}bin/qemu-ga,{,usr/}bin/qemu-ga} flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+
+  network bind netlink raw,
+  network inet stream,
+  network inet6 stream,
+
+  @{exec_path} mr,
+
+  @{bin}/systemctl cx -> systemctl,
+
+  /etc/qemu/qemu-ga.conf r,
+
+  owner @{run}/qga.state rw,
+  owner @{run}/qga.state.@{rand6} rw,
+
+  @{sys}/devices/system/node/ r,
+  @{sys}/devices/system/node/node@{int}/meminfo r,
+
+  @{PROC}/@{pid}/net/dev r,
+  @{PROC}/sys/vm/max_map_count r,
+
+  /dev/vport@{int}p@{int} rw,
+
+  profile systemctl flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/app/systemctl>
+
+    capability net_admin,
+
+    unix type=stream addr=@@{udbus}/bus/poweroff/system,
+    unix type=stream addr=@@{udbus}/bus/shutdown/,
+    unix type=stream addr=@@{udbus}/bus/shutdown/system,
+
+    #aa/dbus talk bus=system name=org.freedesktop.login1 label="@{p_systemd_logind}"
+    # Unix: allow connection to the profile
+    unix type=stream peer=(label="@{p_systemd_logind}"),
+    # org.freedesktop.login1: send and receive anything to the interface on the specific peer label
+    dbus (send receive) bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.login1{,.*}
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label="@{p_systemd_logind}"),
+    dbus send bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.login1{,.*}
+       peer=(name="org.freedesktop.login1{,.*}"),
+    # DBus.Properties: read and send properties
+    dbus (send receive) bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label="@{p_systemd_logind}"),
+    # DBus.Introspectable: allow service introspection
+    dbus send bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label="@{p_systemd_logind}"),
+    # DBus.ObjectManager: allow clients to enumerate sources
+    dbus send bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label="@{p_systemd_logind}"),
+    dbus receive bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label="@{p_systemd_logind}"),
+
+
+    include if exists <local/qemu-ga_systemctl>
+  }
+
+  include if exists <local/qemu-ga>
+}
+
+# vim:syntax=apparmor

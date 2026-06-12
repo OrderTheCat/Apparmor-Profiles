@@ -1,0 +1,203 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/{,evolution-data-server/}evolution-calendar-factory
+@{att} = ""
+profile evolution-calendar-factory /{,usr/}lib{,exec,32,64}/{,evolution-data-server/}evolution-calendar-factory flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/bus-session>
+  include <abstractions/bus-system>
+  include <abstractions/bus/session/org.gtk.vfs.Metadata>
+  include <abstractions/bus/session/org.gtk.vfs.MountTracker>
+  include <abstractions/dconf-write>
+  include <abstractions/gschemas>
+  include <abstractions/nameservice-strict>
+  include <abstractions/network-manager-observe>
+  include <abstractions/p11-kit>
+  include <abstractions/ssl_certs>
+
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+  network netlink raw,
+
+  #aa/dbus own bus=session name=org.gnome.evolution.dataserver.Calendar{,@{u8},View,Factory} path=/org/gnome/evolution/dataserver/Subprocess{,/**}
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gnome.evolution.dataserver.Calendar{,@{u8},View,Factory}{,.*},
+  dbus receive bus=session path=/org/gnome/evolution/dataserver/Subprocess{,/**}
+       interface=org.gnome.evolution.dataserver.Calendar{,@{u8},View,Factory}{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/evolution/dataserver/Subprocess{,/**}
+       interface=org.gnome.evolution.dataserver.Calendar{,@{u8},View,Factory}{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gnome/evolution/dataserver/Subprocess{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gnome/evolution/dataserver/Subprocess{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gnome/evolution/dataserver/Subprocess{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.evolution.dataserver.Calendar{,@{u8},View,Factory}{,.*}}"),
+  dbus send bus=session path=/org/gnome/evolution/dataserver/Subprocess{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=session name=org.gnome.evolution.dataserver.Calendar{,@{u8},View,Factory}
+  dbus bind bus=session name=org.gnome.evolution.dataserver.Calendar{,@{u8},View,Factory}{,.*},
+  dbus receive bus=session path=/org/gnome/evolution/dataserver/Calendar{,@{u8},View,Factory}{,/**}
+       interface=org.gnome.evolution.dataserver.Calendar{,@{u8},View,Factory}{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/evolution/dataserver/Calendar{,@{u8},View,Factory}{,/**}
+       interface=org.gnome.evolution.dataserver.Calendar{,@{u8},View,Factory}{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gnome/evolution/dataserver/Calendar{,@{u8},View,Factory}{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gnome/evolution/dataserver/Calendar{,@{u8},View,Factory}{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gnome/evolution/dataserver/Calendar{,@{u8},View,Factory}{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.evolution.dataserver.Calendar{,@{u8},View,Factory}{,.*}}"),
+  dbus send bus=session path=/org/gnome/evolution/dataserver/Calendar{,@{u8},View,Factory}{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  #aa/dbus talk bus=session name=org.gnome.evolution.dataserver.{Source,Sources@{int}} path=/org/gnome/evolution/dataserver/SourceManager{,/**} label=evolution-source-registry
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=evolution-source-registry),
+  # org.gnome.evolution.dataserver.{Source,Sources@{int}}: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/gnome/evolution/dataserver/SourceManager{,/**}
+       interface=org.gnome.evolution.dataserver.{Source,Sources@{int}}{,.*}
+       peer=(name="{@{busname},org.gnome.evolution.dataserver.{Source,Sources@{int}}{,.*},org.freedesktop.DBus}", label=evolution-source-registry),
+  dbus send bus=session path=/org/gnome/evolution/dataserver/SourceManager{,/**}
+       interface=org.gnome.evolution.dataserver.{Source,Sources@{int}}{,.*}
+       peer=(name="org.gnome.evolution.dataserver.{Source,Sources@{int}}{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/gnome/evolution/dataserver/SourceManager{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gnome.evolution.dataserver.{Source,Sources@{int}}{,.*},org.freedesktop.DBus}", label=evolution-source-registry),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/gnome/evolution/dataserver/SourceManager{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gnome.evolution.dataserver.{Source,Sources@{int}}{,.*},org.freedesktop.DBus}", label=evolution-source-registry),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/gnome/evolution/dataserver/SourceManager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.evolution.dataserver.{Source,Sources@{int}}{,.*},org.freedesktop.DBus}", label=evolution-source-registry),
+  dbus receive bus=session path=/org/gnome/evolution/dataserver/SourceManager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gnome.evolution.dataserver.{Source,Sources@{int}}{,.*},org.freedesktop.DBus}", label=evolution-source-registry),
+
+  #aa/dbus talk bus=session name=org.gnome.evolution.dataserver.AddressBook{,Cursor,View,Factory} path=/org/gnome/evolution/dataserver/Subprocess{,**} label=evolution-addressbook-factory
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=evolution-addressbook-factory),
+  # org.gnome.evolution.dataserver.AddressBook{,Cursor,View,Factory}: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/gnome/evolution/dataserver/Subprocess{,**}
+       interface=org.gnome.evolution.dataserver.AddressBook{,Cursor,View,Factory}{,.*}
+       peer=(name="{@{busname},org.gnome.evolution.dataserver.AddressBook{,Cursor,View,Factory}{,.*},org.freedesktop.DBus}", label=evolution-addressbook-factory),
+  dbus send bus=session path=/org/gnome/evolution/dataserver/Subprocess{,**}
+       interface=org.gnome.evolution.dataserver.AddressBook{,Cursor,View,Factory}{,.*}
+       peer=(name="org.gnome.evolution.dataserver.AddressBook{,Cursor,View,Factory}{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/gnome/evolution/dataserver/Subprocess{,**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gnome.evolution.dataserver.AddressBook{,Cursor,View,Factory}{,.*},org.freedesktop.DBus}", label=evolution-addressbook-factory),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/gnome/evolution/dataserver/Subprocess{,**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gnome.evolution.dataserver.AddressBook{,Cursor,View,Factory}{,.*},org.freedesktop.DBus}", label=evolution-addressbook-factory),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/gnome/evolution/dataserver/Subprocess{,**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.evolution.dataserver.AddressBook{,Cursor,View,Factory}{,.*},org.freedesktop.DBus}", label=evolution-addressbook-factory),
+  dbus receive bus=session path=/org/gnome/evolution/dataserver/Subprocess{,**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gnome.evolution.dataserver.AddressBook{,Cursor,View,Factory}{,.*},org.freedesktop.DBus}", label=evolution-addressbook-factory),
+
+  #aa/dbus talk bus=session name=org.gnome.evolution.dataserver.AddressBook{,Cursor,View,Factory} label=evolution-addressbook-factory
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=evolution-addressbook-factory),
+  # org.gnome.evolution.dataserver.AddressBook{,Cursor,View,Factory}: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/gnome/evolution/dataserver/AddressBook{,Cursor,View,Factory}{,/**}
+       interface=org.gnome.evolution.dataserver.AddressBook{,Cursor,View,Factory}{,.*}
+       peer=(name="{@{busname},org.gnome.evolution.dataserver.AddressBook{,Cursor,View,Factory}{,.*},org.freedesktop.DBus}", label=evolution-addressbook-factory),
+  dbus send bus=session path=/org/gnome/evolution/dataserver/AddressBook{,Cursor,View,Factory}{,/**}
+       interface=org.gnome.evolution.dataserver.AddressBook{,Cursor,View,Factory}{,.*}
+       peer=(name="org.gnome.evolution.dataserver.AddressBook{,Cursor,View,Factory}{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/gnome/evolution/dataserver/AddressBook{,Cursor,View,Factory}{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gnome.evolution.dataserver.AddressBook{,Cursor,View,Factory}{,.*},org.freedesktop.DBus}", label=evolution-addressbook-factory),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/gnome/evolution/dataserver/AddressBook{,Cursor,View,Factory}{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gnome.evolution.dataserver.AddressBook{,Cursor,View,Factory}{,.*},org.freedesktop.DBus}", label=evolution-addressbook-factory),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/gnome/evolution/dataserver/AddressBook{,Cursor,View,Factory}{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.evolution.dataserver.AddressBook{,Cursor,View,Factory}{,.*},org.freedesktop.DBus}", label=evolution-addressbook-factory),
+  dbus receive bus=session path=/org/gnome/evolution/dataserver/AddressBook{,Cursor,View,Factory}{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gnome.evolution.dataserver.AddressBook{,Cursor,View,Factory}{,.*},org.freedesktop.DBus}", label=evolution-addressbook-factory),
+
+
+  dbus receive bus=session
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name=@{busname}, label="{gnome-shell,gnome-extension}"),
+
+  @{exec_path} mr,
+  @{exec_path}-subprocess rix,
+
+  owner @{desktop_share_dirs}/evolution/{,**} rwk,
+
+  owner @{user_cache_dirs}/evolution/calendar/{,**} rwk,
+  owner @{user_cache_dirs}/evolution/tasks/{,**} rwk,
+
+  owner @{user_share_dirs}/evolution/calendar/{,**} rwk,
+  owner @{user_share_dirs}/evolution/memos/system/{,**} rw,
+  owner @{user_share_dirs}/evolution/tasks/system/{,**} rw,
+  owner @{user_share_dirs}/gvfs-metadata/{,*} r,
+
+  @{PROC}/sys/kernel/osrelease r,
+  @{PROC}/cmdline r,
+
+  include if exists <local/evolution-calendar-factory>
+}
+
+# vim:syntax=apparmor

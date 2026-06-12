@@ -1,0 +1,33 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2019-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/hostname @{bin}/domainname @{bin}/ypdomainname @{bin}/nisdomainname @{bin}/dnsdomainname
+@{att} = /att/hostname/
+profile hostname /{{,usr/}bin/hostname,{,usr/}bin/domainname,{,usr/}bin/ypdomainname,{,usr/}bin/nisdomainname,{,usr/}bin/dnsdomainname} flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+  include <abstractions/attached/nameservice-strict>
+
+  capability sys_admin,
+
+  network inet dgram,
+  network inet6 dgram,
+  network netlink raw,
+
+  @{exec_path} mr,
+
+  /etc/defaultdomain r,
+  /etc/hostname r,
+
+  deny owner @{user_share_dirs}/gvfs-metadata/{,*} r,
+
+  include if exists <local/hostname>
+}
+
+# vim:syntax=apparmor

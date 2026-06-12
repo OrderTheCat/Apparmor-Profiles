@@ -1,0 +1,73 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+# LOGPROF-SUGGEST: no
+
+# Minimal set of rules for pkexec.
+
+  abi <abi/4.0>,
+
+  include <abstractions/authentication>
+  include <abstractions/bus-system>
+  include <abstractions/consoles>
+  include <abstractions/nameservice-strict>
+  include <abstractions/wutmp>
+
+  capability audit_write,
+  capability dac_override,
+  capability dac_read_search,
+  capability net_admin,
+  capability setgid,
+  capability setuid,
+  capability sys_ptrace,
+  capability sys_resource,
+
+  network netlink raw,   # PAM
+
+  #aa/dbus talk bus=system name=org.freedesktop.PolicyKit1.Authority label=polkitd
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=polkitd),
+  # org.freedesktop.PolicyKit1.Authority: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/PolicyKit1/Authority{,/**}
+       interface=org.freedesktop.PolicyKit1.Authority{,.*}
+       peer=(name="{@{busname},org.freedesktop.PolicyKit1.Authority{,.*},org.freedesktop.DBus}", label=polkitd),
+  dbus send bus=system path=/org/freedesktop/PolicyKit1/Authority{,/**}
+       interface=org.freedesktop.PolicyKit1.Authority{,.*}
+       peer=(name="org.freedesktop.PolicyKit1.Authority{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/PolicyKit1/Authority{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.PolicyKit1.Authority{,.*},org.freedesktop.DBus}", label=polkitd),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/PolicyKit1/Authority{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.PolicyKit1.Authority{,.*},org.freedesktop.DBus}", label=polkitd),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/PolicyKit1/Authority{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.PolicyKit1.Authority{,.*},org.freedesktop.DBus}", label=polkitd),
+  dbus receive bus=system path=/org/freedesktop/PolicyKit1/Authority{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.PolicyKit1.Authority{,.*},org.freedesktop.DBus}", label=polkitd),
+
+
+  @{bin}/pkexec    mr,
+
+  /etc/shells r,
+
+        @{PROC}/@{pid}/cgroup r,
+        @{PROC}/@{pid}/fdinfo/@{int} r,
+        @{PROC}/@{pid}/stat r,
+  owner @{PROC}/@{pid}/loginuid r,
+
+  owner /dev/tty@{u8} rw,
+
+  deny @{user_share_dirs}/gvfs-metadata/* r,
+
+  include if exists <abstractions/app/pkexec.d>
+
+# vim:syntax=apparmor

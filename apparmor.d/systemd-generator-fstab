@@ -1,0 +1,34 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/systemd/system-generators/systemd-fstab-generator
+@{att} = /att/systemd-generator-fstab/
+profile systemd-generator-fstab /{,usr/}lib{,exec,32,64}/systemd/system-generators/systemd-fstab-generator flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/common/systemd>
+
+  capability dac_override,
+  capability dac_read_search,
+  capability mknod,
+
+  ptrace read peer=@{p_systemd},
+
+  @{exec_path} mr,
+
+  /etc/fstab r,
+
+  @{run}/systemd/generator/** rw,
+
+  @{PROC}/@{pid}/cgroup r,
+
+  priority=10 @{PROC}/1/environ r,
+
+  include if exists <local/systemd-generator-fstab>
+}
+
+# vim:syntax=apparmor

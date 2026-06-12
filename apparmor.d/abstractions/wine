@@ -1,0 +1,34 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+# Basic set of resources for wine regardless of the installation method (system or through a game launcher).
+
+  abi <abi/4.0>,
+
+  owner @{user_share_dirs}/applications/wine/ rw,
+  owner @{user_share_dirs}/applications/wine/**/ rw,
+
+  owner @{user_cache_dirs}/wine/* r,
+
+  owner @{tmp}/.wine-@{uid}/ rw,
+  owner @{tmp}/.wine-@{uid}/server-*/ rw,
+  owner @{tmp}/.wine-@{uid}/server-*/lock rwk,
+  owner @{tmp}/.wine-@{uid}/server-*/socket rw,
+  owner @{tmp}/.wine-@{uid}/server-*/tmpmap-@{hex8} mrw,
+  owner @{att}/@{tmp}/.wine-@{uid}/server-*/socket rw,
+
+  owner @{tmp}/@{word8} rw,
+  owner @{tmp}/protonfixes_test.log w,
+  owner @{tmp}/protonfixes-gtk-@{word8}/{,**} rw,
+
+  owner /dev/shm/wine-@{hex6}-fsync rw,
+  owner /dev/shm/wine-@{hex6}@{h}-fsync rw,
+
+  # NT synchronization driver (performance improvement for games)
+  # https://www.phoronix.com/news/Linux-6.14-NTSYNC-Driver-Ready
+  /dev/ntsync r,
+
+  include if exists <abstractions/wine.d>
+
+# vim:syntax=apparmor

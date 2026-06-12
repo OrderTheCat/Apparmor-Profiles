@@ -1,0 +1,91 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/gnome-clocks
+@{att} = /att/gnome-clocks/
+profile gnome-clocks /{,usr/}bin/gnome-clocks flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/audio-client>
+  include <abstractions/common/gnome>
+  include <abstractions/gstreamer>
+  include <abstractions/localization>
+  include <abstractions/attached/nameservice-strict>
+
+  network netlink raw,
+
+  #aa/dbus own bus=session name=org.gnome.clocks.SearchProvider interface+=org.gnome.Shell.SearchProvider2
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gnome.clocks.SearchProvider{,.*},
+  dbus receive bus=session path=/org/gnome/clocks/SearchProvider{,/**}
+       interface=org.gnome.clocks.SearchProvider{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/clocks/SearchProvider{,/**}
+       interface=org.gnome.clocks.SearchProvider{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  dbus receive bus=session path=/org/gnome/clocks/SearchProvider{,/**}
+       interface=org.gnome.Shell.SearchProvider2
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/clocks/SearchProvider{,/**}
+       interface=org.gnome.Shell.SearchProvider2
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gnome/clocks/SearchProvider{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gnome/clocks/SearchProvider{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gnome/clocks/SearchProvider{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.clocks.SearchProvider{,.*}}"),
+  dbus send bus=session path=/org/gnome/clocks/SearchProvider{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=session name=org.gnome.clocks
+  dbus bind bus=session name=org.gnome.clocks{,.*},
+  dbus receive bus=session path=/org/gnome/clocks{,/**}
+       interface=org.gnome.clocks{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/clocks{,/**}
+       interface=org.gnome.clocks{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gnome/clocks{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gnome/clocks{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gnome/clocks{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.clocks{,.*}}"),
+  dbus send bus=session path=/org/gnome/clocks{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  @{exec_path} mr,
+  @{open_path}  rpx -> child-open-help,
+
+  include if exists <local/gnome-clocks>
+}
+
+# vim:syntax=apparmor

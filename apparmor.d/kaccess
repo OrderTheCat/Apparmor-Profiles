@@ -1,0 +1,94 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/kaccess
+@{att} = /att/kaccess/
+profile kaccess /{,usr/}bin/kaccess flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/audio-client>
+  include <abstractions/graphics>
+  include <abstractions/kde-strict>
+  include <abstractions/ibus-strict>
+  include <abstractions/attached/nameservice-strict>
+
+  #aa/dbus own bus=session name=org.kde.kaccess
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.kde.kaccess{,.*},
+  dbus receive bus=session path=/org/kde/kaccess{,/**}
+       interface=org.kde.kaccess{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/kde/kaccess{,/**}
+       interface=org.kde.kaccess{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/kde/kaccess{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/kde/kaccess{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/kde/kaccess{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.kde.kaccess{,.*}}"),
+  dbus send bus=session path=/org/kde/kaccess{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus talk bus=session name=org.kde.kglobalaccel path=/kglobalaccel label=kglobalacceld
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=kglobalacceld),
+  # org.kde.kglobalaccel: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/kglobalaccel
+       interface=org.kde.kglobalaccel{,.*}
+       peer=(name="{@{busname},org.kde.kglobalaccel{,.*},org.freedesktop.DBus}", label=kglobalacceld),
+  dbus send bus=session path=/kglobalaccel
+       interface=org.kde.kglobalaccel{,.*}
+       peer=(name="org.kde.kglobalaccel{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/kglobalaccel
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.kde.kglobalaccel{,.*},org.freedesktop.DBus}", label=kglobalacceld),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/kglobalaccel
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.kde.kglobalaccel{,.*},org.freedesktop.DBus}", label=kglobalacceld),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/kglobalaccel
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.kde.kglobalaccel{,.*},org.freedesktop.DBus}", label=kglobalacceld),
+  dbus receive bus=session path=/kglobalaccel
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.kde.kglobalaccel{,.*},org.freedesktop.DBus}", label=kglobalacceld),
+
+
+  @{exec_path} mr,
+
+  @{bin}/gsettings rpx,
+
+  owner @{user_config_dirs}/breezerc r,
+  owner @{user_config_dirs}/kaccessrc r,
+  owner @{user_config_dirs}/Kvantum/{,**} r,
+
+  owner @{PROC}/@{pid}/stat r,
+
+  /dev/tty r,
+
+  include if exists <local/kaccess>
+}
+
+# vim:syntax=apparmor

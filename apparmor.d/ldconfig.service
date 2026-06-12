@@ -1,0 +1,30 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+# systemd service: `ldconfig.service`
+#
+# ```sh
+# /sbin/ldconfig -X
+# ```
+#
+# FIXME: configure the systemd unit file to use the `ldconfig` profile.
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{att} = ""
+profile ldconfig.service flags=(complain) {
+  include <abstractions/base-strict>
+
+  @{lib}/ r,
+  @{sbin}/ldconfig  r,
+
+  /var/cache/ldconfig/aux-cache rw,
+  /var/cache/ldconfig/aux-cache~ rw,
+
+  include if exists <local/ldconfig.service>
+}
+
+# vim:syntax=apparmor

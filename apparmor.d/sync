@@ -1,0 +1,24 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/sync
+@{att} = /att/sync/
+profile sync /{,usr/}bin/sync flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+
+  @{exec_path} mr,
+
+  #aa:lint ignore=too-wide
+  # All paths where sync can be used to flush all write operations on a single file to disk
+  /{,**} rw,
+
+  include if exists <local/sync>
+}
+
+# vim:syntax=apparmor

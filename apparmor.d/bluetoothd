@@ -1,0 +1,131 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2015-2022 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/bluetooth/bluetoothd
+@{att} = /att/bluetoothd/
+profile bluetoothd /{,usr/}lib{,exec,32,64}/bluetooth/bluetoothd flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-system>
+  include <abstractions/bus/system/org.freedesktop.hostname1>
+  include <abstractions/uinput>
+
+  # Needed for configuring HCI interfaces
+  capability net_admin,
+  capability net_bind_service,
+
+  network bluetooth raw,
+  network bluetooth seqpacket,
+  network bluetooth stream,
+  network alg seqpacket, # kernel crypto API
+  network netlink raw,
+
+  #aa/dbus own bus=system name=org.bluez path=/{,**}
+  include <abstractions/bus/system/own>
+  dbus bind bus=system name=org.bluez{,.*},
+  dbus receive bus=system path=/{,**}
+       interface=org.bluez{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=system path=/{,**}
+       interface=org.bluez{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=system path=/{,**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=system path=/{,**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=system path=/{,**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.bluez{,.*}}"),
+  dbus send bus=system path=/{,**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus talk bus=system name=org.mpris.MediaPlayer2.Player path=/{,**} label=mpris-proxy
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=mpris-proxy),
+  # org.mpris.MediaPlayer2.Player: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/{,**}
+       interface=org.mpris.MediaPlayer2.Player{,.*}
+       peer=(name="{@{busname},org.mpris.MediaPlayer2.Player{,.*},org.freedesktop.DBus}", label=mpris-proxy),
+  dbus send bus=system path=/{,**}
+       interface=org.mpris.MediaPlayer2.Player{,.*}
+       peer=(name="org.mpris.MediaPlayer2.Player{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/{,**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.mpris.MediaPlayer2.Player{,.*},org.freedesktop.DBus}", label=mpris-proxy),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/{,**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.mpris.MediaPlayer2.Player{,.*},org.freedesktop.DBus}", label=mpris-proxy),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/{,**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.mpris.MediaPlayer2.Player{,.*},org.freedesktop.DBus}", label=mpris-proxy),
+  dbus receive bus=system path=/{,**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.mpris.MediaPlayer2.Player{,.*},org.freedesktop.DBus}", label=mpris-proxy),
+
+
+  # Missing rules from the directive above as these one are not standard
+  # Part of abstractions/bus/system/org.bluez
+  dbus send bus=system
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name=@{busname}),
+  dbus receive bus=system path=/
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name=@{busname}, label="@{p_bluetoothd}"),
+
+  @{exec_path} mr,
+
+  @{lib}/@{multiarch}/bluetooth/plugins/*.so mr,
+
+  /etc/bluetooth/{,*.conf} r,
+
+  / r,
+
+  /var/lib/bluetooth/{,**} rw,
+
+  / r,
+
+  @{run}/sdp rw,
+
+  @{run}/udev/data/+hid:* r,              # For Human Interface Device (mice, controllers, drawing tablets, scanners)
+
+  @{sys}/devices/@{pci}/rfkill@{int}/name r,
+  @{sys}/devices/@{pci}/**/{uevent,name} r,
+  @{sys}/devices/platform/**/rfkill/**/name r,
+  @{sys}/devices/virtual/dmi/id/chassis_type r,
+  @{sys}/devices/virtual/misc/uhid/**/uevent r,
+  @{sys}/devices/virtual/vc/*/uevent r,
+
+  @{PROC}/sys/kernel/hostname r,
+
+  /dev/uhid rw,
+  /dev/rfkill rw,
+  /dev/hidraw@{int} rw,
+
+  include if exists <local/bluetoothd>
+}
+
+# vim:syntax=apparmor

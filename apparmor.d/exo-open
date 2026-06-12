@@ -1,0 +1,33 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2018-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/exo-open
+@{att} = ""
+profile exo-open /{,usr/}bin/exo-open flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/app/open>
+  include <abstractions/path>
+  include <abstractions/app-launcher-user>
+
+  @{exec_path} mr,
+
+  @{lib}/@{multiarch}/xfce4/exo-@{version}/exo-helper-@{version} rpx,
+
+  # It looks like gio-launch-desktop decides what app should be opened
+  @{lib}/@{multiarch}/glib-@{version}/gio-launch-desktop rpx,
+
+  owner @{PROC}/@{pid}/fd/ r,
+
+        /** r,
+  owner /** rw,
+
+  include if exists <local/exo-open>
+}
+
+# vim:syntax=apparmor

@@ -1,0 +1,93 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/baobab
+@{att} = /att/baobab/
+profile baobab /{,usr/}bin/baobab flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus/session/org.gtk.Private.RemoteVolumeMonitor>
+  include <abstractions/bus/system/org.freedesktop.hostname1>
+  include <abstractions/common/gnome>
+  include <abstractions/deny-sensitive-home>
+
+  #aa/dbus own bus=session name=org.gnome.baobab
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gnome.baobab{,.*},
+  dbus receive bus=session path=/org/gnome/baobab{,/**}
+       interface=org.gnome.baobab{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/baobab{,/**}
+       interface=org.gnome.baobab{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gnome/baobab{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gnome/baobab{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gnome/baobab{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.baobab{,.*}}"),
+  dbus send bus=session path=/org/gnome/baobab{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  #aa/dbus talk bus=session name=org.gtk.vfs label="gvfsd{,-*}"
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label="gvfsd{,-*}"),
+  # org.gtk.vfs: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/gtk/vfs{,/**}
+       interface=org.gtk.vfs{,.*}
+       peer=(name="{@{busname},org.gtk.vfs{,.*},org.freedesktop.DBus}", label="gvfsd{,-*}"),
+  dbus send bus=session path=/org/gtk/vfs{,/**}
+       interface=org.gtk.vfs{,.*}
+       peer=(name="org.gtk.vfs{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/gtk/vfs{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gtk.vfs{,.*},org.freedesktop.DBus}", label="gvfsd{,-*}"),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/gtk/vfs{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gtk.vfs{,.*},org.freedesktop.DBus}", label="gvfsd{,-*}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/gtk/vfs{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gtk.vfs{,.*},org.freedesktop.DBus}", label="gvfsd{,-*}"),
+  dbus receive bus=session path=/org/gtk/vfs{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gtk.vfs{,.*},org.freedesktop.DBus}", label="gvfsd{,-*}"),
+
+
+  @{exec_path} mr,
+
+  @{open_path}  rpx -> child-open-help,
+
+  #aa:lint ignore=too-wide
+  # As a directory tree analyzer it needs full access to the filesystem
+  / r,
+  /** r,
+
+  deny @{efi}/{,**} r,
+
+  include if exists <local/baobab>
+}
+
+# vim:syntax=apparmor

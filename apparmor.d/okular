@@ -1,0 +1,115 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2019-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/okular
+@{att} = ""
+profile okular /{,usr/}bin/okular flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/audio-client>
+  include <abstractions/devices-usb>
+  include <abstractions/graphics>
+  include <abstractions/kde-globals-write>
+  include <abstractions/kde-strict>
+  include <abstractions/nameservice-strict>
+  include <abstractions/qt5-settings-write>
+  include <abstractions/user-download-strict>
+  include <abstractions/user-read-strict>
+  include <abstractions/user-write-strict>
+
+  network netlink raw,
+
+  ptrace read peer=@{p_systemd},
+
+  signal send set=term peer=kioworker,
+
+  @{exec_path} mr,
+
+  @{bin}/ps2pdf   rpux,
+
+  @{bin}/gpg{,2}  rcx -> gpg,
+  @{bin}/gpgconf  rcx -> gpg,
+  @{bin}/gpgsm    rcx -> gpg,
+
+  @{open_path}    rpx -> child-open,
+  /{,usr/}lib{,exec,32,64}/*-linux-gnu*/{,libexec/}kf5/kioslave5 Px,
+  /{,usr/}lib{,exec,32,64}/*-linux-gnu*/{,libexec/}kf6/kioworker Px,
+  /{,usr/}lib{,exec,32,64}/kf5/kioslave5 Px,
+  /{,usr/}lib{,exec,32,64}/kf6/kioworker Px,
+
+  /usr/share/color-schemes/{,**} r,
+  /usr/share/okular/{,**} r,
+
+  /etc/fstab r,
+  /etc/xdg/dolphinrc r,
+
+  / r,
+  @{MOUNTS}/ r,
+
+  owner @{user_cache_dirs}/kcrash-metadata/okular.*.ini w,
+  owner @{user_cache_dirs}/okular/{,**} rw,
+
+  owner @{user_config_dirs}/#@{int} rw,
+  owner @{user_config_dirs}/KDE/*.conf r,
+  owner @{user_config_dirs}/kioslaverc r,
+  owner @{user_config_dirs}/kservicemenurc r,
+  owner @{user_config_dirs}/kwalletrc r,
+  owner @{user_config_dirs}/okular-generator-popplerrc r,
+  owner @{user_config_dirs}/okularpartrc rw,
+  owner @{user_config_dirs}/okularpartrc.@{rand6} rwl,
+  owner @{user_config_dirs}/okularpartrc.lock rwk,
+  owner @{user_config_dirs}/okularrc rw,
+  owner @{user_config_dirs}/okularrc.@{rand6} rwl,
+  owner @{user_config_dirs}/okularrc.lock rwk,
+
+  owner @{user_share_dirs}/#@{int} rw,
+  owner @{user_share_dirs}/kxmlgui{5,6}/okular/{,*} r,
+  owner @{user_share_dirs}/okular/ rw,
+  owner @{user_share_dirs}/okular/** rwlk,
+  owner @{user_share_dirs}/user-places.xbel r,
+
+  owner @{user_state_dirs}/#@{int} rw,
+  owner @{user_state_dirs}/okularstaterc rw,
+  owner @{user_state_dirs}/okularstaterc.@{rand6} rwlk,
+  owner @{user_state_dirs}/okularstaterc.lock rwk,
+
+  owner @{tmp}/@{hex12}@{h} w, # when opening pdf files as attchments in Thunderbird
+  owner @{tmp}/#@{int} rw,
+  owner @{tmp}/kmail2.@{rand6} r,
+  owner @{tmp}/messageviewer_attachment_@{rand6}/{,*} r, # files opened from KMail as mail attachment,
+  owner @{tmp}/okular_@{rand6}.ps rwl -> /tmp/#@{int},
+  owner @{tmp}/okular.@{rand6} rwl -> /tmp/#@{int},
+
+  owner @{run}/user/@{uid}/#@{int} rw,
+  owner @{run}/user/@{uid}/okular@{rand6}.@{int}.kioworker.socket rwl,
+
+  owner @{PROC}/@{pid}/fd/ r,
+  owner @{PROC}/@{pid}/mountinfo r,
+  owner @{PROC}/@{pid}/mounts r,
+  owner @{PROC}/@{pid}/stat r,
+
+  profile gpg flags=(complain) {
+    include <abstractions/base-strict>
+    include <abstractions/consoles>
+
+    @{bin}/gpg{,2}  mr,
+    @{bin}/gpgconf  mr,
+    @{bin}/gpgsm    mr,
+
+    owner @{HOME}/@{XDG_GPG_DIR}/*.conf r,
+
+    owner @{run}/user/@{uid}/ r,
+    owner @{run}/user/@{uid}/gnupg/ r,
+
+    include if exists <local/okular_gpg>
+  }
+
+  include if exists <local/okular>
+}
+
+# vim:syntax=apparmor

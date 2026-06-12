@@ -1,0 +1,101 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2018-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/xdg-screensaver
+@{att} = ""
+profile xdg-screensaver /{,usr/}bin/xdg-screensaver flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/common/xdg>
+  include <abstractions/perl>
+
+  @{exec_path} r,
+
+  @{bin}/lockfile   ix,
+  @{bin}/xautolock  ix,
+
+  @{bin}/dbus-send            cx -> bus,
+  @{bin}/xprop                px,
+  @{bin}/xset                 px,
+  @{bin}/ps                   px,
+  @{bin}/hostname             px,
+
+  profile bus flags=(complain) {
+    include <abstractions/base-strict>
+    include <abstractions/app/bus>
+    include <abstractions/bus-session>
+    include <abstractions/consoles>
+
+    #aa/dbus talk bus=session name=org.freedesktop.ScreenSaver label=gsd-screensaver-proxy
+    # Unix: allow connection to the profile
+    unix type=stream peer=(label=gsd-screensaver-proxy),
+    # org.freedesktop.ScreenSaver: send and receive anything to the interface on the specific peer label
+    dbus (send receive) bus=session path=/org/freedesktop/ScreenSaver{,/**}
+       interface=org.freedesktop.ScreenSaver{,.*}
+       peer=(name="{@{busname},org.freedesktop.ScreenSaver{,.*},org.freedesktop.DBus}", label=gsd-screensaver-proxy),
+    dbus send bus=session path=/org/freedesktop/ScreenSaver{,/**}
+       interface=org.freedesktop.ScreenSaver{,.*}
+       peer=(name="org.freedesktop.ScreenSaver{,.*}"),
+    # DBus.Properties: read and send properties
+    dbus (send receive) bus=session path=/org/freedesktop/ScreenSaver{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.ScreenSaver{,.*},org.freedesktop.DBus}", label=gsd-screensaver-proxy),
+    # DBus.Introspectable: allow service introspection
+    dbus send bus=session path=/org/freedesktop/ScreenSaver{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.ScreenSaver{,.*},org.freedesktop.DBus}", label=gsd-screensaver-proxy),
+    # DBus.ObjectManager: allow clients to enumerate sources
+    dbus send bus=session path=/org/freedesktop/ScreenSaver{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.ScreenSaver{,.*},org.freedesktop.DBus}", label=gsd-screensaver-proxy),
+    dbus receive bus=session path=/org/freedesktop/ScreenSaver{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.ScreenSaver{,.*},org.freedesktop.DBus}", label=gsd-screensaver-proxy),
+
+    #aa/dbus talk bus=session name=org.gnome.ScreenSaver label=gjs
+    # Unix: allow connection to the profile
+    unix type=stream peer=(label=gjs),
+    # org.gnome.ScreenSaver: send and receive anything to the interface on the specific peer label
+    dbus (send receive) bus=session path=/org/gnome/ScreenSaver{,/**}
+       interface=org.gnome.ScreenSaver{,.*}
+       peer=(name="{@{busname},org.gnome.ScreenSaver{,.*},org.freedesktop.DBus}", label=gjs),
+    dbus send bus=session path=/org/gnome/ScreenSaver{,/**}
+       interface=org.gnome.ScreenSaver{,.*}
+       peer=(name="org.gnome.ScreenSaver{,.*}"),
+    # DBus.Properties: read and send properties
+    dbus (send receive) bus=session path=/org/gnome/ScreenSaver{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gnome.ScreenSaver{,.*},org.freedesktop.DBus}", label=gjs),
+    # DBus.Introspectable: allow service introspection
+    dbus send bus=session path=/org/gnome/ScreenSaver{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gnome.ScreenSaver{,.*},org.freedesktop.DBus}", label=gjs),
+    # DBus.ObjectManager: allow clients to enumerate sources
+    dbus send bus=session path=/org/gnome/ScreenSaver{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.ScreenSaver{,.*},org.freedesktop.DBus}", label=gjs),
+    dbus receive bus=session path=/org/gnome/ScreenSaver{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gnome.ScreenSaver{,.*},org.freedesktop.DBus}", label=gjs),
+
+
+    include if exists <local/xdg-screensaver_bus>
+  }
+
+  include if exists <local/xdg-screensaver>
+}
+
+# vim:syntax=apparmor

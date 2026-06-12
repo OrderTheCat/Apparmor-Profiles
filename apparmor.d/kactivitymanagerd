@@ -1,0 +1,119 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path}  =  @{lib}/kactivitymanagerd
+@{exec_path} += @{lib}/@{multiarch}/{,libexec/}kactivitymanagerd
+@{att} = /att/kactivitymanagerd/
+profile kactivitymanagerd /{{,usr/}lib{,exec,32,64}/kactivitymanagerd,{,usr/}lib{,exec,32,64}/*-linux-gnu*/{,libexec/}kactivitymanagerd,{,usr/}lib{,exec,32,64}/*-linux-gnu*/{,libexec/}kactivitymanagerd} flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-session>
+  include <abstractions/devices-usb>
+  include <abstractions/graphics>
+  include <abstractions/kde-strict>
+  include <abstractions/ibus-strict>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/recent-documents-write>
+  include <abstractions/thumbnails-cache-read>
+  include <abstractions/user-read-strict>
+
+  #aa/dbus own bus=session name=org.kde.ActivityManager path=/ActivityManager
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.kde.ActivityManager{,.*},
+  dbus receive bus=session path=/ActivityManager
+       interface=org.kde.ActivityManager{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/ActivityManager
+       interface=org.kde.ActivityManager{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/ActivityManager
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/ActivityManager
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/ActivityManager
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.kde.ActivityManager{,.*}}"),
+  dbus send bus=session path=/ActivityManager
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=session name=org.kde.runners.activities
+  dbus bind bus=session name=org.kde.runners.activities{,.*},
+  dbus receive bus=session path=/org/kde/runners/activities{,/**}
+       interface=org.kde.runners.activities{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/kde/runners/activities{,/**}
+       interface=org.kde.runners.activities{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/kde/runners/activities{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/kde/runners/activities{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/kde/runners/activities{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.kde.runners.activities{,.*}}"),
+  dbus send bus=session path=/org/kde/runners/activities{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  @{exec_path} mr,
+
+  /etc/xdg/menus/{,*/} r,
+  /usr/share/kf{5,6}/kactivitymanagerd/{,**} r,
+  /usr/share/kservices{5,6}/{,**} r,
+
+  /etc/machine-id r,
+
+  owner @{HOME}/@{XDG_DESKTOP_DIR}/ r,
+  owner @{HOME}/@{XDG_DESKTOP_DIR}/*.desktop r,
+
+  owner @{user_config_dirs}/#@{int} rw,
+  owner @{user_config_dirs}/breezerc r,
+  owner @{user_config_dirs}/kactivitymanagerdrc.lock rwk,
+  owner @{user_config_dirs}/kactivitymanagerdrc{,.@{rand6}} rwl -> @{user_config_dirs}/#@{int},
+  owner @{user_config_dirs}/libreoffice/**.xcu r,
+  owner @{user_config_dirs}/menus/{,**} r,
+
+  owner @{user_share_dirs}/kactivitymanagerd/{,**} rwlk,
+  owner @{user_share_dirs}/kservices{5,6}/{,**} r,
+  owner @{user_share_dirs}/user-places.xbel r,
+
+  owner @{user_state_dirs}/kactivitymanagerdstaterc r,
+
+  owner @{tmp}/kmail2.@{rand6} r,
+
+  owner @{run}/user/@{uid}/#@{int} rw,
+  owner @{run}/user/@{uid}/*@{rand6}.*.socket rwl -> @{run}/user/@{uid}/#@{int},
+
+  owner @{PROC}/@{pid}/mountinfo r,
+  owner @{PROC}/@{pid}/mounts r,
+
+  /dev/tty r,
+
+  include if exists <local/kactivitymanagerd>
+}
+
+# vim:syntax=apparmor

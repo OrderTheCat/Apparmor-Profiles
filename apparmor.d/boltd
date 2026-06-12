@@ -1,0 +1,117 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/boltd
+@{att} = /att/boltd/
+profile boltd /{,usr/}lib{,exec,32,64}/boltd flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-system>
+  include <abstractions/bus/system/org.freedesktop.PolicyKit1>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/sys/dmi>
+
+  capability net_admin,
+
+  network netlink raw,
+
+  #aa/dbus own bus=system name=org.freedesktop.bolt1 path=/org/freedesktop/bolt
+  include <abstractions/bus/system/own>
+  dbus bind bus=system name=org.freedesktop.bolt1{,.*},
+  dbus receive bus=system path=/org/freedesktop/bolt
+       interface=org.freedesktop.bolt1{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=system path=/org/freedesktop/bolt
+       interface=org.freedesktop.bolt1{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=system path=/org/freedesktop/bolt
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=system path=/org/freedesktop/bolt
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=system path=/org/freedesktop/bolt
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.bolt1{,.*}}"),
+  dbus send bus=system path=/org/freedesktop/bolt
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=system name=org.freedesktop.bolt
+  dbus bind bus=system name=org.freedesktop.bolt{,.*},
+  dbus receive bus=system path=/org/freedesktop/bolt{,/**}
+       interface=org.freedesktop.bolt{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=system path=/org/freedesktop/bolt{,/**}
+       interface=org.freedesktop.bolt{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=system path=/org/freedesktop/bolt{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=system path=/org/freedesktop/bolt{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=system path=/org/freedesktop/bolt{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.bolt{,.*}}"),
+  dbus send bus=system path=/org/freedesktop/bolt{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  @{exec_path} mr,
+
+  / r,
+
+  /var/lib/boltd/{,**} rw,
+
+  owner @{run}/boltd/{,**} rw,
+
+  @{run}/udev/data/+thunderbolt:* r,      # For Thunderbolt devices, such as docks, external GPUs, and storage devices.
+
+  @{sys}/bus/ r,
+  @{sys}/bus/thunderbolt/devices/ r,
+  @{sys}/bus/wmi/devices/ r,
+  @{sys}/class/ r,
+  @{sys}/devices/**/uevent r,
+  @{sys}/devices/@{pci}/device r,
+  @{sys}/devices/@{pci}/domain@{int}/ r,
+  @{sys}/devices/@{pci}/domain@{int}/**/ r,
+  @{sys}/devices/@{pci}/domain@{int}/**/authorized r,
+  @{sys}/devices/@{pci}/domain@{int}/**/boot r,
+  @{sys}/devices/@{pci}/domain@{int}/**/device_name r,
+  @{sys}/devices/@{pci}/domain@{int}/**/generation r,
+  @{sys}/devices/@{pci}/domain@{int}/**/rx_lanes r,
+  @{sys}/devices/@{pci}/domain@{int}/**/rx_speed r,
+  @{sys}/devices/@{pci}/domain@{int}/**/tx_lanes r,
+  @{sys}/devices/@{pci}/domain@{int}/**/tx_speed r,
+  @{sys}/devices/@{pci}/domain@{int}/**/unique_id r,
+  @{sys}/devices/@{pci}/domain@{int}/**/vendor_name r,
+  @{sys}/devices/@{pci}/domain@{int}/boot_acl rw,
+  @{sys}/devices/@{pci}/domain@{int}/iommu_dma_protection r,
+  @{sys}/devices/@{pci}/domain@{int}/security r,
+  @{sys}/devices/platform/**/uevent r,
+  @{sys}/devices/platform/*/wmi_bus/wmi_bus-*/@{uuid}/force_power rw,
+
+  include if exists <local/boltd>
+}
+
+# vim:syntax=apparmor

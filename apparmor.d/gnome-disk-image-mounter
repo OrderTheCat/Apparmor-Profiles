@@ -1,0 +1,63 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/gnome-disk-image-mounter
+@{att} = /att/gnome-disk-image-mounter/
+profile gnome-disk-image-mounter /{,usr/}bin/gnome-disk-image-mounter flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus/session/org.gtk.vfs.MountTracker>
+  include <abstractions/dconf-write>
+  include <abstractions/deny-sensitive-home>
+  include <abstractions/gnome-strict>
+
+  #aa/dbus talk bus=system name=org.freedesktop.UDisks2 label=udisksd
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=udisksd),
+  # org.freedesktop.UDisks2: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/UDisks2{,/**}
+       interface=org.freedesktop.UDisks2{,.*}
+       peer=(name="{@{busname},org.freedesktop.UDisks2{,.*},org.freedesktop.DBus}", label=udisksd),
+  dbus send bus=system path=/org/freedesktop/UDisks2{,/**}
+       interface=org.freedesktop.UDisks2{,.*}
+       peer=(name="org.freedesktop.UDisks2{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/UDisks2{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.UDisks2{,.*},org.freedesktop.DBus}", label=udisksd),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/UDisks2{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.UDisks2{,.*},org.freedesktop.DBus}", label=udisksd),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/UDisks2{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.UDisks2{,.*},org.freedesktop.DBus}", label=udisksd),
+  dbus receive bus=system path=/org/freedesktop/UDisks2{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.UDisks2{,.*},org.freedesktop.DBus}", label=udisksd),
+
+
+  @{exec_path} mr,
+
+  # Allow to mount user files
+  owner @{HOME}/{,**} r,
+  owner @{MOUNTS}/{,**} r,
+  owner @{tmp}/*/{,**} r,
+
+  @{run}/mount/utab r,
+
+  owner @{PROC}/@{pid}/mountinfo r,
+
+  include if exists <local/gnome-disk-image-mounter>
+}
+
+# vim:syntax=apparmor

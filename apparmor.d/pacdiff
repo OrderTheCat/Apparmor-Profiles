@@ -1,0 +1,62 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/pacdiff
+@{att} = /att/pacdiff/
+profile pacdiff /{,usr/}bin/pacdiff flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+
+  capability dac_read_search,
+  capability mknod,
+
+  network inet stream,
+  network inet6 stream,
+
+  @{exec_path} mr,
+
+  @{sh_path}          rix,
+  @{bin}/{m,g,}awk     ix,
+  @{bin}/cat           ix,
+  @{bin}/cmp           ix,
+  @{bin}/find          ix,
+  @{bin}/locate        ix,
+  @{bin}/pacman        ix,
+  @{bin}/pacman-conf   px,
+  @{bin}/pacsort       ix,
+  @{bin}/rm            ix,
+  @{bin}/sed           ix,
+  @{bin}/tput          ix,
+  @{editor_path}       cx -> editor,
+
+  #aa:lint ignore=too-wide
+  # packages files
+  / r,
+  @{efi}/{,**} r,
+  /etc/{,**} rw,
+  /opt/{,**} r,
+  /srv/{,**} r,
+  /usr/{,**} r,
+  /var/{,**} r,
+
+  /dev/tty rw,
+  /dev/pts/@{u16} rw,
+
+  profile editor flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/app/editor>
+
+    #aa:lint ignore=too-wide
+    /etc/** rw,
+
+    include if exists <local/pacdiff_editor>
+  }
+
+  include if exists <local/pacdiff>
+}
+
+# vim:syntax=apparmor

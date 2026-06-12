@@ -1,0 +1,65 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/systemd-sysusers
+@{att} = /att/systemd-sysusers/
+profile systemd-sysusers /{,usr/}bin/systemd-sysusers flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+  include <abstractions/common/systemd>
+
+  capability audit_write,
+  capability chown,
+  capability fsetid,
+  capability net_admin,
+
+  network netlink raw,
+
+  ptrace read peer=@{p_systemd},
+
+  signal send set=cont peer=child-pager,
+
+  @{exec_path} mr,
+
+  @{pager_path} rpx -> child-pager,
+
+  # Config file locations
+  /etc/sysusers.d/{,*.conf} r,
+  @{run}/sysusers.d/{,*.conf} r,
+  @{lib}/sysusers.d/{,*.conf} r,
+
+  # Where the users can be created,
+  /home/{,*} rw,
+  /var/{,**} rw,
+  @{run}/{,**} rw,
+
+  /etc/ r,
+  /etc/nsswitch.conf r,
+  /etc/{passwd,shadow} rw,
+  /etc/{passwd,shadow}- rw,
+  /etc/{passwd,shadow}+ rw,
+  /etc/.#{passwd,shadow}@{hex} rw,
+  /etc/{group,gshadow} rw,
+  /etc/{group,gshadow}- rw,
+  /etc/{group,gshadow}+ rw,
+  /etc/.#{group,gshadow}@{hex} rw,
+  /etc/.pwd.lock rwk,
+
+  owner @{PROC}/@{pid}/cgroup r,
+
+        /dev/tty@{u8} rw,
+  owner /dev/pts/@{u16} rw,
+
+  # Inherit Silencer
+  deny network inet6 stream,
+  deny network inet stream,
+
+  include if exists <local/systemd-sysusers>
+}
+
+# vim:syntax=apparmor

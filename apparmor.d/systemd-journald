@@ -1,0 +1,102 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2019-2022 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/systemd/systemd-journald
+@{att} = /att/systemd-journald/
+profile systemd-journald /{,usr/}lib{,exec,32,64}/systemd/systemd-journald flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+  include <abstractions/common/systemd>
+
+  capability audit_control,
+  capability audit_read,
+  capability chown,
+  capability dac_override,
+  capability dac_read_search,
+  capability fowner,
+  capability kill,
+  capability setgid,
+  capability setuid,
+  capability sys_admin,
+  capability sys_ptrace,
+  capability syslog,
+
+  network netlink raw,
+
+  ptrace read,
+
+  @{exec_path} mr,
+
+  /etc/systemd/journald.conf r,
+  /etc/systemd/journald.conf.d/{,**} r,
+
+  /{run,var}/log/ w,
+  /{run,var}/log/journal/ rw,
+  /{run,var}/log/journal/@{hex32}/ rw,
+  /{run,var}/log/journal/@{hex32}/* rwl -> /{run,var}/log/journal/@{hex32}/#@{int},
+
+  owner @{run}/systemd/journal/{,**} rw,
+
+  @{run}/host/container-manager r,
+  @{run}/systemd/units/log-*.service r,
+  @{run}/utmp rk,
+
+  @{run}/udev/data/+acpi:* r,             # Exposes ACPI objects (power buttons, batteries, thermal)
+  @{run}/udev/data/+bluetooth:* r,        # For bluetooth adapters, controllers, and active connections.
+  @{run}/udev/data/+hdaudio:* r,          # For High Definition Audio devices, such as sound cards and audio interfaces.
+  @{run}/udev/data/+hid:* r,              # For Human Interface Device (mice, controllers, drawing tablets, scanners)
+  @{run}/udev/data/+i2c:* r,              # For Inter-Integrated Circuit, low-speed peripherals (sensors, EEPROMs, etc.)
+  @{run}/udev/data/+ieee80211:* r,        # For Wi-Fi devices, such as wireless network cards and access points.
+  @{run}/udev/data/+input:input@{int} r,  # for mouse, keyboard, touchpad
+  @{run}/udev/data/+mdio_bus:* r,         # For Management Data Input/Output (Ethernet PHY (physical layer) devices)
+  @{run}/udev/data/+pci:* r,              # Identifies all PCI devices (CPU, GPU, Network, Disks, USB, etc.)
+  @{run}/udev/data/+platform:* r,         # Identifies onboard devices (laptop/board model, power controllers, thermal sensors)
+  @{run}/udev/data/+scsi:*      r,        # For SCSI devices. Block-storage for SATA, SAS, USB, iSCSI
+  @{run}/udev/data/+sdio:*      r,        # For Secure Digital Input Output devices, such as Wi-Fi, Bluetooth cards, GPS and NFC modules.
+  @{run}/udev/data/+thunderbolt:* r,      # For Thunderbolt devices, such as docks, external GPUs, and storage devices.
+  @{run}/udev/data/+usb-serial:* r,       # For USB to serial adapters
+  @{run}/udev/data/+usb:* r,              # Identifies all USB devices
+  @{run}/udev/data/+virtio:*    r,        # For paravirtualized devices (network interfaces, block devices, console)
+  @{run}/udev/data/b43:@{int} r,          # for /dev/nbd*
+  @{run}/udev/data/b254:@{int} r,         # for /dev/zram*
+  @{run}/udev/data/b259:@{int} r,         # Block Extended Major
+  @{run}/udev/data/c1:@{int}    r,        # For RAM disk
+  @{run}/udev/data/c4:@{int} r,           # For TTY devices
+  @{run}/udev/data/c7:@{int} r,           # For Virtual console capture devices
+  @{run}/udev/data/b8:@{int} r,           # for /dev/sd*
+  @{run}/udev/data/c10:@{int}   r,        # For non-serial mice, misc features
+  @{run}/udev/data/c108:@{int} r,         # For /dev/ppp
+  @{run}/udev/data/c18[8-9]:@{int} r,     # USB devices & USB serial converters
+  @{run}/udev/data/c203:@{int} r,         # CPU CPUID information
+  @{run}/udev/data/c29:@{int} r,          # For CD-ROM
+  @{run}/udev/data/c@{dynamic}:@{int} r,  # For dynamic assignment range 234 to 254, 384 to 511
+
+  @{sys}/devices/**/uevent r,
+  @{sys}/firmware/efi/efivars/SecureBoot-@{uuid} r,
+  @{sys}/module/printk/parameters/time r,
+
+  @{PROC}/@{pids}/attr/current r,
+  @{PROC}/@{pids}/cgroup r,
+  @{PROC}/@{pids}/cmdline r,
+  @{PROC}/@{pids}/comm r,
+  @{PROC}/@{pids}/loginuid r,
+  @{PROC}/@{pids}/sessionid r,
+  @{PROC}/@{pids}/status r,
+  @{PROC}/pressure/* r,
+  @{PROC}/sys/kernel/hostname r,
+
+  /dev/kmsg rw,
+
+  /var/lib/dbus/machine-id r,
+  /etc/machine-id r,
+
+  include if exists <local/systemd-journald>
+}
+
+# vim:syntax=apparmor

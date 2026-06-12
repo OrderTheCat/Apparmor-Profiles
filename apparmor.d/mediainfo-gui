@@ -1,0 +1,26 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021 Mikhail Morfikov
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/mediainfo-gui
+@{att} = ""
+profile mediainfo-gui /{,usr/}bin/mediainfo-gui flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/dconf-write>
+  include <abstractions/desktop>
+  include <abstractions/graphics>
+  include <abstractions/user-read-strict>
+
+  @{exec_path} mr,
+
+  @{open_path} rpx -> child-open-browsers,
+
+  include if exists <local/mediainfo-gui>
+}
+
+# vim:syntax=apparmor

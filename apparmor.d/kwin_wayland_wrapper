@@ -1,0 +1,59 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/kwin_wayland_wrapper
+@{att} = ""
+profile kwin_wayland_wrapper /{,usr/}bin/kwin_wayland_wrapper flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/bus-session>
+  include <abstractions/wayland-strict>
+  include <abstractions/X-strict>
+
+  signal (send) set=(term, kill) peer=kwin_wayland,
+
+  #aa/dbus own bus=session name=org.kde.KWinWrapper
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.kde.KWinWrapper{,.*},
+  dbus receive bus=session path=/org/kde/KWinWrapper{,/**}
+       interface=org.kde.KWinWrapper{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/kde/KWinWrapper{,/**}
+       interface=org.kde.KWinWrapper{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/kde/KWinWrapper{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/kde/KWinWrapper{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/kde/KWinWrapper{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.kde.KWinWrapper{,.*}}"),
+  dbus send bus=session path=/org/kde/KWinWrapper{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  @{exec_path} mr,
+
+  @{bin}/kwin_wayland rpx,
+
+  owner @{run}/user/@{uid}/#@{int} rw,
+  owner @{run}/user/@{uid}/xauth_@{rand6} w,
+
+  include if exists <local/kwin_wayland_wrapper>
+}
+
+# vim:syntax=apparmor

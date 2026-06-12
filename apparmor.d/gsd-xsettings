@@ -1,0 +1,173 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/gsd-xsettings
+@{att} = /att/gsd-xsettings/
+profile gsd-xsettings /{,usr/}lib{,exec,32,64}/gsd-xsettings flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/accounts-observe>
+  include <abstractions/bus/session/org.gnome.Mutter.DisplayConfig>
+  include <abstractions/bus/session/org.gnome.Shell.Introspect>
+  include <abstractions/bus/session/org.gtk.vfs.Daemon>
+  include <abstractions/dconf-write>
+  include <abstractions/fontconfig-cache-write>
+  include <abstractions/gnome-strict>
+  include <abstractions/graphics>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/session-manager>
+
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+  network netlink raw,
+
+  #aa/dbus own bus=session name=org.gnome.SettingsDaemon.XSettings
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gnome.SettingsDaemon.XSettings{,.*},
+  dbus receive bus=session path=/org/gnome/SettingsDaemon/XSettings{,/**}
+       interface=org.gnome.SettingsDaemon.XSettings{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/SettingsDaemon/XSettings{,/**}
+       interface=org.gnome.SettingsDaemon.XSettings{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gnome/SettingsDaemon/XSettings{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gnome/SettingsDaemon/XSettings{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gnome/SettingsDaemon/XSettings{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.SettingsDaemon.XSettings{,.*}}"),
+  dbus send bus=session path=/org/gnome/SettingsDaemon/XSettings{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=session name=org.gtk.Settings
+  dbus bind bus=session name=org.gtk.Settings{,.*},
+  dbus receive bus=session path=/org/gtk/Settings{,/**}
+       interface=org.gtk.Settings{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gtk/Settings{,/**}
+       interface=org.gtk.Settings{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gtk/Settings{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gtk/Settings{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gtk/Settings{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gtk.Settings{,.*}}"),
+  dbus send bus=session path=/org/gtk/Settings{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  #aa/dbus talk bus=session name=org.gnome.Mutter.X11 label=gnome-shell
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=gnome-shell),
+  # org.gnome.Mutter.X11: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/gnome/Mutter/X11{,/**}
+       interface=org.gnome.Mutter.X11{,.*}
+       peer=(name="{@{busname},org.gnome.Mutter.X11{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  dbus send bus=session path=/org/gnome/Mutter/X11{,/**}
+       interface=org.gnome.Mutter.X11{,.*}
+       peer=(name="org.gnome.Mutter.X11{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/gnome/Mutter/X11{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gnome.Mutter.X11{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/gnome/Mutter/X11{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gnome.Mutter.X11{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/gnome/Mutter/X11{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.Mutter.X11{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  dbus receive bus=session path=/org/gnome/Mutter/X11{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gnome.Mutter.X11{,.*},org.freedesktop.DBus}", label=gnome-shell),
+
+
+  dbus send bus=session path=/org/freedesktop/DBus
+       interface=org.freedesktop.DBus
+       member=GetId
+       peer=(name=org.freedesktop.DBus, label="@{p_dbus_session}"),
+
+  dbus receive bus=system path=/org/freedesktop/Accounts
+       interface=org.freedesktop.Accounts
+       member={UserAdded,UserDeleted}
+       peer=(name=@{busname}, label="@{p_accounts_daemon}"),
+
+  dbus send bus=system path=/org/freedesktop/Accounts/User@{uid}
+       interface=org.freedesktop.Accounts.User
+       member=SetInputSources
+       peer=(name=@{busname}, label="@{p_accounts_daemon}"),
+
+  @{exec_path} mr,
+  @{sh_path} mr,
+
+  @{bin}/cat                   rix,
+  @{bin}/sed                   rix,
+  @{bin}/which{,.debianutils}  rix,
+
+  @{bin}/busctl         rpx,
+  @{bin}/pactl          rpx,
+  @{bin}/run-parts      rcx -> run-parts,
+  @{bin}/xprop          rpx,
+  @{bin}/xrdb           rpx,
+  @{lib}/{,ibus/}ibus-x11 rpx,
+
+  /etc/X11/Xsession.options r,
+  @{etc_ro}/xdg/Xwayland-session.d/ r,
+  @{etc_ro}/xdg/Xwayland-session.d/* rix,
+
+  @{run}/systemd/sessions/* r,
+  @{run}/systemd/users/@{uid} r,
+
+  owner @{PROC}/@{pid}/fd/ r,
+
+  /dev/tty rw,
+  /dev/tty@{u8} rw,
+
+  profile run-parts flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+
+    @{bin}/run-parts mr,
+
+    /etc/X11/Xresources/ r,
+
+    include if exists <local/gsd-xsettings_run-parts>
+  }
+
+  include if exists <local/gsd-xsettings>
+}
+
+# vim:syntax=apparmor

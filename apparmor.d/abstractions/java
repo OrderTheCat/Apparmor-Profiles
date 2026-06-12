@@ -1,0 +1,21 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+  abi <abi/4.0>,
+
+  /usr/share/java/{,**} r,
+
+  /etc/java/{,**} r,
+  /etc/java-*/{,**} r,
+
+  @{sys}/devices/system/cpu/cpu@{int}/microcode/version r,
+
+  @{PROC}/cgroups r,
+
+  # Control which memory segments are written to the core dump file
+  owner @{PROC}/@{pid}/coredump_filter rw,
+
+  include if exists <abstractions/java.d>
+
+# vim:syntax=apparmor

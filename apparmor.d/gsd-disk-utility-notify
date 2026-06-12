@@ -1,0 +1,87 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/gsd-disk-utility-notify
+@{att} = /att/gsd-disk-utility-notify/
+profile gsd-disk-utility-notify /{,usr/}lib{,exec,32,64}/gsd-disk-utility-notify flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-session>
+  include <abstractions/bus-system>
+  include <abstractions/upower-observe>
+
+  #aa/dbus own bus=session name=org.gnome.Disks.NotificationMonitor
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gnome.Disks.NotificationMonitor{,.*},
+  dbus receive bus=session path=/org/gnome/Disks/NotificationMonitor{,/**}
+       interface=org.gnome.Disks.NotificationMonitor{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/Disks/NotificationMonitor{,/**}
+       interface=org.gnome.Disks.NotificationMonitor{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gnome/Disks/NotificationMonitor{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gnome/Disks/NotificationMonitor{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gnome/Disks/NotificationMonitor{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.Disks.NotificationMonitor{,.*}}"),
+  dbus send bus=session path=/org/gnome/Disks/NotificationMonitor{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus talk bus=system name=org.freedesktop.UDisks2 label=udisksd
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=udisksd),
+  # org.freedesktop.UDisks2: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/UDisks2{,/**}
+       interface=org.freedesktop.UDisks2{,.*}
+       peer=(name="{@{busname},org.freedesktop.UDisks2{,.*},org.freedesktop.DBus}", label=udisksd),
+  dbus send bus=system path=/org/freedesktop/UDisks2{,/**}
+       interface=org.freedesktop.UDisks2{,.*}
+       peer=(name="org.freedesktop.UDisks2{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/UDisks2{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.UDisks2{,.*},org.freedesktop.DBus}", label=udisksd),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/UDisks2{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.UDisks2{,.*},org.freedesktop.DBus}", label=udisksd),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/UDisks2{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.UDisks2{,.*},org.freedesktop.DBus}", label=udisksd),
+  dbus receive bus=system path=/org/freedesktop/UDisks2{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.UDisks2{,.*},org.freedesktop.DBus}", label=udisksd),
+
+
+  dbus receive bus=session
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name=@{busname}, label="{gnome-shell,gnome-extension}"),
+
+  @{exec_path} mr,
+
+  include if exists <local/gsd-disk-utility-notify>
+}
+
+# vim:syntax=apparmor

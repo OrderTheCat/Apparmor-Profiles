@@ -1,0 +1,50 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2020-2022 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/systemd-detect-virt
+@{att} = /att/systemd-detect-virt/
+profile systemd-detect-virt /{,usr/}bin/systemd-detect-virt flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+  include <abstractions/sys/dmi>
+
+  capability sys_ptrace,
+
+  ptrace read peer=@{p_systemd},
+
+  @{exec_path} mr,
+
+  @{run}/cloud-init/ds-identify.log w,
+  @{run}/host/container-manager r,
+  @{run}/systemd/container r,
+
+  @{sys}/devices/virtual/dmi/id/product_version r,
+  @{sys}/firmware/dmi/entries/*/raw r,
+  @{sys}/firmware/uv/prot_virt_guest r,
+  @{sys}/hypervisor/properties/features r,
+  @{sys}/hypervisor/type r,
+
+  @{PROC}/1/environ r,
+  @{PROC}/device-tree/ r,
+  @{PROC}/device-tree/compatible r,
+  @{PROC}/device-tree/hypervisor/compatible r,
+  @{PROC}/sys/kernel/osrelease r,
+  @{PROC}/sysinfo r,
+  @{PROC}/xen/capabilities r,
+
+  /dev/cpu/@{int}/msr r,
+
+  deny capability net_admin,
+  deny capability perfmon,
+  deny network (send receive) netlink raw,
+
+  include if exists <local/systemd-detect-virt>
+}
+
+# vim:syntax=apparmor

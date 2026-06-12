@@ -1,0 +1,46 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2018-2021 Mikhail Morfikov
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/pinentry-qt
+@{att} = ""
+profile pinentry-qt /{,usr/}bin/pinentry-qt flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/consoles>
+  include <abstractions/fontconfig-cache-read>
+  include <abstractions/graphics>
+  include <abstractions/kde-strict>
+  include <abstractions/nameservice-strict>
+  include <abstractions/qt5-compose-cache-write>
+
+  ptrace read peer=gpg-agent,
+
+  dbus receive bus=session path=/org/gnome/keyring/Prompt/p@{int}
+       interface=org.gnome.keyring.internal.Prompter.Callback
+       member={PromptReady,PromptDone}
+       peer=(name=@{busname}),
+
+  dbus send bus=session path=/org/gnome/keyring/Prompter
+       interface=org.gnome.keyring.internal.Prompter
+       member={BeginPrompting,PerformPrompt,StopPrompting}
+       peer=(name=org.gnome.keyring.SystemPrompter),
+
+  @{exec_path} mr,
+
+  /etc/machine-id r,
+  /var/lib/dbus/machine-id r,
+
+  owner @{tmp}/xauth_@{rand6} r,
+  owner /dev/shm/#@{int} rw,
+
+  owner @{PROC}/@{pid}/cmdline r,
+
+  include if exists <local/pinentry-qt>
+}
+
+# vim:syntax=apparmor

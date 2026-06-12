@@ -1,0 +1,106 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2022 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/monitorix
+@{att} = ""
+profile monitorix /{,usr/}bin/monitorix flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/consoles>
+  include <abstractions/fontconfig-cache-read>
+  include <abstractions/fonts>
+  include <abstractions/hwmon>
+  include <abstractions/nameservice-strict>
+  include <abstractions/perl>
+
+  capability net_admin,
+  capability chown,
+  capability fowner,
+  capability setgid,
+  capability fsetid,
+  capability setuid,
+  capability dac_override,
+  capability kill,
+
+  network netlink raw,
+  network inet stream,
+  network inet6 stream,
+
+  ptrace read,
+
+  signal receive set=(hup) peer=logroate,
+
+  @{exec_path} mr,
+
+  @{sh_path}                rix,
+  @{bin}/{,e}grep            ix,
+  @{bin}/{m,g,}awk           ix,
+  @{bin}/cat                 ix,
+  @{bin}/df                  ix,
+  @{bin}/free                ix,
+  @{bin}/getconf             ix,
+  @{bin}/ps                  px,
+  @{bin}/sensors             px,
+  @{bin}/tail                ix,
+  @{bin}/who                 px,
+  @{sbin}/lvm                px,
+  @{sbin}/ss                 px,
+  @{sbin}/xtables-{nft,legacy}-multi  rix,
+
+  /var/lib/monitorix/www/cgi/monitorix.cgi ix,
+
+  /etc/monitorix/{,**} r,
+
+  /var/lib/monitorix/ rw,
+  /var/lib/monitorix/** rwk,
+
+  /var/log/monitorix w,
+  /var/log/monitorix-* w,
+
+  /srv/http/monitorix/ rw,
+  /srv/http/monitorix/** rwk,
+
+  / r,
+  /tmp/ r,
+
+  owner @{run}/monitorix.pid w,
+
+  @{run}/utmp rk,
+
+  @{sys}/class/i2c-adapter/ r,
+  @{sys}/devices/@{pci}/i2c-*/{,**/}name r,
+  @{sys}/devices/**/thermal*/{,**} r,
+
+        @{PROC}/ r,
+        @{PROC}/@{pid}/net/dev r,
+        @{PROC}/@{pid}/net/tcp{,6} r,
+        @{PROC}/@{pid}/net/udp{,6} r,
+        @{PROC}/@{pids}/cmdline r,
+        @{PROC}/@{pids}/fdinfo/ r,
+        @{PROC}/@{pids}/io r,
+        @{PROC}/@{pids}/stat r,
+        @{PROC}/diskstats r,
+        @{PROC}/interrupts r,
+        @{PROC}/loadavg r,
+        @{PROC}/swaps r,
+        @{PROC}/sys/fs/dentry-state r,
+        @{PROC}/sys/fs/file-nr r,
+        @{PROC}/sys/fs/inode-nr r,
+        @{PROC}/sys/kernel/osrelease r,
+        @{PROC}/sys/kernel/pid_max r,
+        @{PROC}/sys/kernel/random/entropy_avail r,
+        @{PROC}/uptime r,
+  owner @{PROC}/@{pid}/mountinfo r,
+  owner @{PROC}/@{pid}/mounts r,
+  owner @{PROC}/@{pid}/net/ip_tables_names r,
+  owner @{PROC}/@{pid}/net/ip6_tables_names r,
+
+  include if exists <local/monitorix>
+}
+
+# vim:syntax=apparmor

@@ -1,0 +1,70 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/gnome-control-center-global-shortcuts-provider
+@{att} = /att/gnome-control-center-global-shortcuts-provider/
+profile gnome-control-center-global-shortcuts-provider /{,usr/}lib{,exec,32,64}/gnome-control-center-global-shortcuts-provider flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+  include <abstractions/dconf-write>
+  include <abstractions/fontconfig-cache-write>
+  include <abstractions/gnome-strict>
+  include <abstractions/graphics>
+
+  signal receive set=term peer=gdm,
+  signal receive set=hup peer=gdm-session-worker,
+
+  unix type=stream peer=(label=gnome-shell),
+
+  #aa/dbus own bus=session name=org.gnome.Settings.GlobalShortcutsProvider
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gnome.Settings.GlobalShortcutsProvider{,.*},
+  dbus receive bus=session path=/org/gnome/Settings/GlobalShortcutsProvider{,/**}
+       interface=org.gnome.Settings.GlobalShortcutsProvider{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/Settings/GlobalShortcutsProvider{,/**}
+       interface=org.gnome.Settings.GlobalShortcutsProvider{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gnome/Settings/GlobalShortcutsProvider{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gnome/Settings/GlobalShortcutsProvider{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gnome/Settings/GlobalShortcutsProvider{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.Settings.GlobalShortcutsProvider{,.*}}"),
+  dbus send bus=session path=/org/gnome/Settings/GlobalShortcutsProvider{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  dbus send bus=session path=/org/gnome/Mutter/ServiceChannel
+       interface=org.gnome.Mutter.ServiceChannel
+       member=OpenWaylandServiceConnection
+       peer=(name=@{busname}, label=gnome-shell),
+
+  @{exec_path} mr,
+
+  /usr/share/gnome-control-center/keybindings/{,**} r,
+
+  owner @{gdm_cache_dirs}/fontconfig/* r,
+
+  owner @{PROC}/@{pid}/task/@{tid}/comm w,
+
+  include if exists <local/gnome-control-center-global-shortcuts-provider>
+}
+
+# vim:syntax=apparmor

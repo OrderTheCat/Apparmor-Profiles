@@ -1,0 +1,40 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/systemd/system-generators/cloud-init-generator
+@{att} = /att/systemd-generator-cloud-init/
+profile systemd-generator-cloud-init /{,usr/}lib{,exec,32,64}/systemd/system-generators/cloud-init-generator flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+  include <abstractions/attached/nameservice-strict>
+
+  capability sys_admin, # optional: no audit
+
+  ptrace read peer=@{p_systemd},
+
+  @{exec_path} mr,
+
+  @{sh_path}                     rix,
+  @{bin}/ln                      rix,
+  @{bin}/mkdir                   rix,
+  @{bin}/systemd-detect-virt     rpx,
+  @{lib}/cloud-init/ds-identify rpux,
+
+  @{run}/cloud-init/ w,
+  @{run}/cloud-init/cloud-init-generator.* rw,
+  @{run}/cloud-init/disabled w,
+  @{run}/cloud-init/enabled w,
+  @{run}/systemd/generator.early/multi-user.target.wants/ w,
+  @{run}/systemd/generator.early/multi-user.target.wants/cloud-init.target w,
+
+  @{PROC}/cmdline r,
+
+  include if exists <local/systemd-generator-cloud-init>
+}
+
+# vim:syntax=apparmor

@@ -1,0 +1,29 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/systemd-inhibit
+@{att} = /att/systemd-inhibit/
+profile systemd-inhibit /{,usr/}bin/systemd-inhibit flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+
+  capability net_admin,
+  capability sys_resource,
+
+  signal receive set=term peer=@{p_packagekitd},
+
+  @{exec_path} mr,
+
+  @{bin}/cat rix,
+
+  @{att}@{run}/systemd/inhibit/@{int}.ref rw,
+
+  include if exists <local/systemd-inhibit>
+}
+
+# vim:syntax=apparmor

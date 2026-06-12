@@ -1,0 +1,57 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+# Allow to act as a gvfs backend app
+
+  abi <abi/4.0>,
+
+  include <abstractions/bus/session/org.gtk.vfs.Daemon>
+  include <abstractions/bus/session/org.gtk.vfs.Mountable>
+  include <abstractions/bus/session/org.gtk.vfs.Spawner>
+
+  #aa/dbus talk bus=session name=org.gtk.vfs.MountTracker path=/org/gtk/vfs/mounttracker label=gvfsd
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=gvfsd),
+  # org.gtk.vfs.MountTracker: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/gtk/vfs/mounttracker
+       interface=org.gtk.vfs.MountTracker{,.*}
+       peer=(name="{@{busname},org.gtk.vfs.MountTracker{,.*},org.freedesktop.DBus}", label=gvfsd),
+  dbus send bus=session path=/org/gtk/vfs/mounttracker
+       interface=org.gtk.vfs.MountTracker{,.*}
+       peer=(name="org.gtk.vfs.MountTracker{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/gtk/vfs/mounttracker
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gtk.vfs.MountTracker{,.*},org.freedesktop.DBus}", label=gvfsd),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/gtk/vfs/mounttracker
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gtk.vfs.MountTracker{,.*},org.freedesktop.DBus}", label=gvfsd),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/gtk/vfs/mounttracker
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gtk.vfs.MountTracker{,.*},org.freedesktop.DBus}", label=gvfsd),
+  dbus receive bus=session path=/org/gtk/vfs/mounttracker
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gtk.vfs.MountTracker{,.*},org.freedesktop.DBus}", label=gvfsd),
+
+
+  # Server's side of session/org.gtk.vfs.MountOperation
+  dbus send bus=session path=/org/gtk/gvfs/mountop/@{int}
+       interface=org.gtk.vfs.MountOperation
+       member={AskPassword,AskQuestion}
+       peer=(name=@{busname}),
+
+  dbus receive bus=session
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name=@{busname}, label="{gnome-shell,gnome-extension}"),
+
+  include if exists <abstractions/gvfs-backend.d>
+
+# vim:syntax=apparmor

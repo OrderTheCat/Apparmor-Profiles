@@ -1,0 +1,150 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/startplasma-wayland @{bin}/startplasma-x11
+@{att} = ""
+profile startplasma /{{,usr/}bin/startplasma-wayland,{,usr/}bin/startplasma-x11} flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/audio-client>
+  include <abstractions/bus-session>
+  include <abstractions/bus/system/org.freedesktop.locale1>
+  include <abstractions/kde-globals-write>
+  include <abstractions/kde-strict>
+
+  signal (receive) set=(hup) peer=@{p_systemd},
+  signal (receive) set=(term) peer=sddm,
+  signal receive set=term peer=plasmalogin-helper,
+
+  #aa/dbus talk bus=session name=org.freedesktop.systemd1 label="@{p_systemd_user}"
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label="@{p_systemd_user}"),
+  # org.freedesktop.systemd1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.systemd1{,.*}
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label="@{p_systemd_user}"),
+  dbus send bus=session path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.systemd1{,.*}
+       peer=(name="org.freedesktop.systemd1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label="@{p_systemd_user}"),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label="@{p_systemd_user}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label="@{p_systemd_user}"),
+  dbus receive bus=session path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label="@{p_systemd_user}"),
+
+  #aa/dbus talk bus=session name=org.kde.KSplash path=/KSplash label=ksplashqml
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=ksplashqml),
+  # org.kde.KSplash: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/KSplash
+       interface=org.kde.KSplash{,.*}
+       peer=(name="{@{busname},org.kde.KSplash{,.*},org.freedesktop.DBus}", label=ksplashqml),
+  dbus send bus=session path=/KSplash
+       interface=org.kde.KSplash{,.*}
+       peer=(name="org.kde.KSplash{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/KSplash
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.kde.KSplash{,.*},org.freedesktop.DBus}", label=ksplashqml),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/KSplash
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.kde.KSplash{,.*},org.freedesktop.DBus}", label=ksplashqml),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/KSplash
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.kde.KSplash{,.*},org.freedesktop.DBus}", label=ksplashqml),
+  dbus receive bus=session path=/KSplash
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.kde.KSplash{,.*},org.freedesktop.DBus}", label=ksplashqml),
+
+
+  @{exec_path} mr,
+
+  @{sh_path}                rix,
+  @{bin}/env                rix,
+  @{bin}/{,e}grep           rix,
+  @{bin}/kapplymousetheme  rpux,
+  @{bin}/kdeinit5_shutdown rpux,
+  @{bin}/ksplashqml        rpux,
+  @{bin}/plasma_session     rpx,
+  @{bin}/xrdb               rpx,
+  @{bin}/xsetroot           rpx,
+
+  @{lib}/@{multiarch}/libexec/plasma-sourceenv.sh r,
+
+  /usr/share/byobu/desktop/{,**} r,
+  /usr/share/color-schemes/{,**} r,
+  /usr/share/desktop-directories/{,**} r,
+  /usr/share/kservices{5,6}/{,**} r,
+  /usr/share/kservicetypes5/{,**} r,
+  /usr/share/plasma/{,**} r,
+
+  /etc/machine-id r,
+  /etc/xdg/menus/{,**} r,
+  /etc/xdg/plasma-workspace/env/{,*} r,
+  /etc/xdg/plasmarc r,
+
+        @{user_cache_dirs}/ksycoca{5,6}_* rwkl -> @{user_cache_dirs}/#@{int},
+  owner @{user_cache_dirs}/#@{int} rwk,
+  owner @{user_cache_dirs}/kcrash-metadata/ rw,
+  owner @{user_cache_dirs}/plasma-svgelements rw,
+
+  owner @{user_config_dirs}/gtkrc{,*} rwlk,
+  owner @{user_config_dirs}/kdedefaults/ rw,
+  owner @{user_config_dirs}/kdedefaults/** rwkl -> @{user_config_dirs}/kdedefaults/**,
+  owner @{user_config_dirs}/ksplashrc r,
+  owner @{user_config_dirs}/kwinkdeglobalsrc.lock rwk,
+  owner @{user_config_dirs}/menus/{,**} r,
+  owner @{user_config_dirs}/plasma_workspace.notifyrc r,
+  owner @{user_config_dirs}/plasma-localerc rwl,
+  owner @{user_config_dirs}/plasma-localerc.lock rwk,
+  owner @{user_config_dirs}/plasma-workspace/env/ r,
+  owner @{user_config_dirs}/startkderc r,
+  owner @{user_config_dirs}/Trolltech.conf.lock rwk,
+  owner @{user_config_dirs}/Trolltech.conf{,.@{rand6}} rwl,
+  owner @{user_config_dirs}/plasma-workspace/env/qt-media-backend.sh r,
+  owner link @{user_config_dirs}/kdeglobals -> @{user_config_dirs}/#@{int},
+
+  owner @{user_share_dirs}/color-schemes/{,**} r,
+  owner @{user_share_dirs}/kservices{5,6}/{,**} r,
+  owner @{user_share_dirs}/plasmalogin/wayland-session.log rw,
+  owner @{user_share_dirs}/sddm/wayland-session.log rw,
+  owner @{user_share_dirs}/sddm/xorg-session.log rw,
+
+  owner @{tmp}/#@{int} rw,
+  owner @{tmp}/startplasma-{x11,wayland}.@{rand6} rwl -> /tmp/#@{int},
+
+  owner @{run}/user/@{uid}/ r,
+
+  @{PROC}/sys/kernel/random/boot_id r,
+
+  /dev/tty rw,
+  /dev/tty@{u8} rw,
+
+  include if exists <local/startplasma>
+}
+
+# vim:syntax=apparmor

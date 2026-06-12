@@ -1,0 +1,47 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/fuse-overlayfs
+@{att} = /att/fuse-overlayfs/
+profile fuse-overlayfs /{,usr/}bin/fuse-overlayfs flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+
+  capability chown,
+  capability dac_override,
+  capability dac_read_search,
+  capability fowner,
+  capability setfcap,
+  capability setuid,
+  capability sys_admin,
+
+  unix (send receive) type=stream peer=(label=fusermount),
+
+  mount fstype=fuse.overlayfs  options=(rw,nodev,noatime) fuse-overlayfs -> @{user_share_dirs}/containers/storage/overlay/**/merged/,
+  mount fstype=fuse.fuse-overlayfs options=(rw noatime nodev nosuid) fuse-overlayfs -> @{HOME}/**/,
+
+  @{exec_path} mr,
+
+  @{bin}/mount          rix,
+  @{bin}/umount         rix,
+  @{bin}/fusermount{,3}  px,
+
+  owner @{HOME}/{,**} r,
+  owner @{HOME}/**/ rw,
+  owner @{user_share_dirs}/containers/storage/overlay/{,**} rwl,
+  @{user_share_dirs}/games/*/.game-root-mnt/ r,
+
+  @{PROC}/sys/kernel/overflowgid r,
+  @{PROC}/sys/kernel/overflowuid r,
+  @{PROC}/sys/fs/pipe-max-size r,
+
+  /dev/fuse rw,
+
+  include if exists <local/fuse-overlayfs>
+}
+
+# vim:syntax=apparmor

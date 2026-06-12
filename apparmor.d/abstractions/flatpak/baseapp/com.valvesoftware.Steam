@@ -1,0 +1,43 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+# LOGPROF-SUGGEST: no
+
+  abi <abi/4.0>,
+
+  include <abstractions/flatpak/baseapp/org.chromium.Chromium>
+  include <abstractions/flatpak/baseapp/org.winehq.Wine>
+
+  @{lib}/os-release rk,
+
+  owner @{run}/user/@{uid}/ r,
+  owner @{run}/user/@{uid}/discord-ipc-@{int} w,
+
+  owner /dev/shm/#@{int} rw,
+  owner /dev/shm/fossilize-*-@{int}-@{int} rw,
+  owner /dev/shm/u@{uid}-Shm_@{hex6} rw,
+  owner /dev/shm/u@{uid}-Shm_@{hex6}@{h} rw,
+  owner /dev/shm/u@{uid}-Shm_@{hex8} rw,
+  owner /dev/shm/u@{uid}-ValveIPCSharedObj-Steam rwk,
+
+  owner @{att}/dev/shm/ValveIPCSHM_@{uid} rw,
+  owner       /dev/shm/ValveIPCSHM_@{uid} rw,
+
+  @{sys}/devices/system/clocksource/clocksource@{int}/current_clocksource r,
+  @{sys}/devices/virtual/dmi/id/board_name r,
+
+  # Pressure Stall Information interface
+  @{PROC}/pressure/cpu r,
+  @{PROC}/pressure/io r,
+  @{PROC}/pressure/memory r,
+
+  # Allow reading command line arguments for process identification
+  @{PROC}/@{pids}/comm rk,
+
+        @{PROC}/locks r,
+        @{PROC}/sys/kernel/sched_autogroup_enabled r,
+  owner @{PROC}/@{pid}/autogroup rw,
+
+  include if exists <abstractions/flatpak/baseapp/com.valvesoftware.Steam.d>
+
+# vim:syntax=apparmor

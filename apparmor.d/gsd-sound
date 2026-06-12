@@ -1,0 +1,68 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/gsd-sound
+@{att} = /att/gsd-sound/
+profile gsd-sound /{,usr/}lib{,exec,32,64}/gsd-sound flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/audio-client>
+  include <abstractions/bus-session>
+  include <abstractions/bus-system>
+  include <abstractions/bus/session/org.gtk.vfs.MountTracker>
+  include <abstractions/attached/consoles>
+  include <abstractions/dconf-write>
+  include <abstractions/gschemas>
+  include <abstractions/session-manager>
+
+  signal receive set=(term, hup) peer=gdm*,
+
+  #aa/dbus own bus=session name=org.gnome.SettingsDaemon.Sound
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gnome.SettingsDaemon.Sound{,.*},
+  dbus receive bus=session path=/org/gnome/SettingsDaemon/Sound{,/**}
+       interface=org.gnome.SettingsDaemon.Sound{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/SettingsDaemon/Sound{,/**}
+       interface=org.gnome.SettingsDaemon.Sound{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gnome/SettingsDaemon/Sound{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gnome/SettingsDaemon/Sound{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gnome/SettingsDaemon/Sound{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.SettingsDaemon.Sound{,.*}}"),
+  dbus send bus=session path=/org/gnome/SettingsDaemon/Sound{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  dbus receive bus=session
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name=@{busname}, label="{gnome-shell,gnome-extension}"),
+
+  @{exec_path} mr,
+
+  owner @{gdm_share_dirs}/sounds/ rw,
+
+  owner @{user_share_dirs}/sounds/ rw,
+
+  include if exists <local/gsd-sound>
+}
+
+# vim:syntax=apparmor

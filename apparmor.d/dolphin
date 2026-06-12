@@ -1,0 +1,161 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/dolphin
+@{att} = ""
+profile dolphin /{,usr/}bin/dolphin flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/app-launcher-user>
+  include <abstractions/bus-session>
+  include <abstractions/bus/system/org.freedesktop.UDisks2>
+  include <abstractions/deny-sensitive-home>
+  include <abstractions/devices-usb>
+  include <abstractions/disks-read>
+  include <abstractions/fontconfig-cache-read>
+  include <abstractions/graphics>
+  include <abstractions/kde-strict>
+  include <abstractions/nameservice-strict>
+  include <abstractions/recent-documents-write>
+  include <abstractions/thumbnails-cache-write>
+
+  network netlink raw,
+
+  signal send set=hup peer=@{p_systemd},
+  signal send set=term peer=kioworker,
+
+  ptrace read peer=@{p_systemd},
+  ptrace read peer=okular,
+
+  @{exec_path} mr,
+
+  @{lib}/libheif/            r,
+  @{lib}/libheif/*.so*      mr,
+
+
+  priority=1 @{ldd_path} rix,
+
+  @{bin}/lsb_release    rpx,
+  @{lib}/{,@{multiarch}/}utempter/utempter rpx,
+  @{thunderbird_path}   rpx,
+
+  /{,usr/}lib{,exec,32,64}/*-linux-gnu*/{,libexec/}kf5/kioslave5 Px,
+  /{,usr/}lib{,exec,32,64}/*-linux-gnu*/{,libexec/}kf6/kioworker Px,
+  /{,usr/}lib{,exec,32,64}/kf5/kioslave5 Px,
+  /{,usr/}lib{,exec,32,64}/kf6/kioworker Px,
+
+  /usr/share/kf5/kmoretools/{,**} r,
+  /usr/share/kio/{,**} r,
+  /usr/share/konsole/{,**} r,
+  /usr/share/kservices{5,6}/{,**} r,
+  /usr/share/kservicetypes5/{,**} r,
+  /usr/share/misc/termcap r,
+  /usr/share/templates/{,*.desktop} r,
+  /usr/share/thumbnailers/{,**} r,
+  /usr/share/color-schemes/{,**} r,
+
+  /etc/fstab r,
+  /etc/exports r,
+  /etc/machine-id r,
+  /etc/xdg/arkrc r,
+  /etc/xdg/dolphinrc r,
+  /etc/xdg/ui/ui_standards.rc r,
+
+  /var/lib/samba/usershare/ r,
+
+  #aa:lint ignore=too-wide
+  # Full access to user's data
+  / r,
+  /*/ r,
+  @{bin}/ r,
+  @{lib}/ r,
+  @{MOUNTDIRS}/ r,
+  @{MOUNTS}/ r,
+  @{MOUNTS}/** rw,
+  owner @{HOME}/{,**} rw,
+  owner @{run}/user/@{uid}/{,**} rw,
+  owner @{tmp}/{,**} rw,
+
+  # Silence non user's data
+  deny @{efi}/{,**} r,
+  deny /opt/{,**} r,
+  deny /root/{,**} r,
+  deny /tmp/.* rw,
+  deny /tmp/.*/{,**} rw,
+
+  owner @{user_state_dirs}/#@{int} rwk,
+  owner @{user_state_dirs}/dolphinstaterc{,.@{rand6}} rwl -> @{user_state_dirs}/#@{int},
+  owner @{user_state_dirs}/UserFeedback.org.kde.dolphin.lock k,
+  owner @{user_state_dirs}/UserFeedback.org.kde.dolphin.@{rand6} l -> @{user_state_dirs}/#@{int},
+  owner @{user_share_dirs}/dolphin/ rw,
+  owner @{user_share_dirs}/dolphin/** rwkl -> @{user_share_dirs}/dolphin/#@{int},
+
+  owner @{user_config_dirs}/#@{int} rw,
+  owner @{user_config_dirs}/dolphinrc{,.@{rand6}} rwl -> @{user_config_dirs}/#@{int},
+  owner @{user_config_dirs}/dolphinrc.lock rwk,
+  owner @{user_config_dirs}/kde.org/#@{int} rwk,
+  owner @{user_config_dirs}/kde.org/UserFeedback.org.kde.dolphin.conf{,.@{rand6}} rwl -> @{user_config_dirs}/kde.org/#@{int},
+  owner @{user_config_dirs}/kde.org/UserFeedback.org.kde.dolphin.conf.lock rwk,
+  owner @{user_config_dirs}/kdeglobals.@{rand6} l -> @{user_config_dirs}/#@{int},
+  owner @{user_config_dirs}/kdeglobals.lock k,
+  owner @{user_config_dirs}/kiorc l -> @{user_config_dirs}/#@{int},
+  owner @{user_config_dirs}/kiorc.lock k,
+  owner @{user_config_dirs}/kservicemenurc l -> @{user_config_dirs}/#@{int},
+  owner @{user_config_dirs}/kservicemenurc.lock k,
+  owner @{user_config_dirs}/ktrashrc l -> @{user_config_dirs}/#@{int},
+  owner @{user_config_dirs}/ktrashrc.lock k,
+  owner @{user_config_dirs}/knfsshare.{,.@{rand6}} rwk,
+  owner @{user_config_dirs}/knfsshare.lock rwk,
+  owner @{user_config_dirs}/session/#@{int} rwk,
+  owner @{user_config_dirs}/session/dolphin_dolphin_dolphin.@{rand6} rwl -> @{user_config_dirs}/session/#@{int},
+
+  owner @{user_cache_dirs}/ksplash/qmlcache/*.qmlc rwl -> @{user_cache_dirs}/dolphin/qmlcache/#@{int},
+  owner @{user_cache_dirs}/ksplash/qmlcache/*.qmlc.@{rand6} rwl -> @{user_cache_dirs}/dolphin/qmlcache/#@{int},
+
+  owner @{user_state_dirs}/dolphinstaterc{,.*} rwlk -> @{user_state_dirs}/#@{int},
+
+  owner @{tmp}/#@{int} rwk,
+  owner @{tmp}/dolphin.@{rand6} rwl -> @{tmp}/#@{int},
+  owner @{tmp}/dolphin.@{rand6}.@{rand6} l -> @{tmp}/#@{int},
+  owner @{tmp}/dolphin.@{rand6}.lock rwk,
+
+        @{run}/issue r,
+        @{run}/mount/utab r,
+  owner @{run}/user/@{uid}/#@{int} rw,
+  owner @{run}/user/@{uid}/dolphin@{rand6}.@{int}.kioworker.socket rwl -> @{run}/user/@{uid}/#@{int},
+
+  @{run}/udev/data/+*:* r,                # Identifies all subsystems
+  @{run}/udev/data/c@{int}:@{int} r,      # Identifies all character devices
+
+  @{sys}/bus/ r,
+  @{sys}/bus/*/devices/ r,
+  @{sys}/class/*/ r,
+  @{sys}/devices/**/uevent r,
+
+  owner @{sys}/fs/cgroup/user.slice/user-@{uid}.slice/user@@{uid}.service/app.slice/app-org.kde.dolphin-@{int}.scope/cgroup.controllers r,
+  owner @{sys}/fs/cgroup/user.slice/user-@{uid}.slice/user@@{uid}.service/app.slice/app-org.kde.dolphin-@{int}.scope/cgroup.subtree_control w,
+  owner @{sys}/fs/cgroup/user.slice/user-@{uid}.slice/user@@{uid}.service/app.slice/app-org.kde.dolphin-@{int}.scope/main.scope/ w,
+  owner @{sys}/fs/cgroup/user.slice/user-@{uid}.slice/user@@{uid}.service/app.slice/app-org.kde.dolphin-@{int}.scope/main.scope/cgroup.procs w,
+  owner @{sys}/fs/cgroup/user.slice/user-@{uid}.slice/user@@{uid}.service/app.slice/app-org.kde.dolphin-@{int}.scope/tab(@{int}).scope/ w,
+  owner @{sys}/fs/cgroup/user.slice/user-@{uid}.slice/user@@{uid}.service/app.slice/app-org.kde.dolphin-@{int}.scope/tab(@{int}).scope/cgroup.procs w,
+
+  owner @{PROC}/@{pid}/cgroup r,
+  owner @{PROC}/@{pid}/cmdline r,
+  owner @{PROC}/@{pid}/fdinfo/@{int} r,
+  owner @{PROC}/@{pid}/mountinfo r,
+  owner @{PROC}/@{pid}/mounts r,
+  owner @{PROC}/@{pid}/stat r,
+  owner @{PROC}/@{pid}/task/@{tid}/children r,
+
+  @{sys}/devices/virtual/block/dm-@{int}/uevent r,
+
+  /dev/tty rw,
+
+  include if exists <local/dolphin>
+}
+
+# vim:syntax=apparmor

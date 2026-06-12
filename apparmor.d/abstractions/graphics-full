@@ -1,0 +1,17 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+  abi <abi/4.0>,
+
+  include <abstractions/amdgpu>
+  include <abstractions/graphics>
+  include <abstractions/oneapi>
+
+  include <abstractions/sys/gpumon>
+
+  /dev/char/@{dynamic}:@{int} w,          # For dynamic assignment range 234 to 254, 384 to 511
+
+  include if exists <abstractions/graphics-full.d>
+
+# vim:syntax=apparmor

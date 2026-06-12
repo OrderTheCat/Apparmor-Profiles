@@ -1,0 +1,56 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2019-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/reprepro
+@{att} = ""
+profile reprepro /{,usr/}bin/reprepro flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/consoles>
+
+  @{exec_path} mr,
+
+  @{bin}/gpgconf rcx -> gpg,
+  @{bin}/gpg{,2} rcx -> gpg,
+  @{bin}/gpgsm   rcx -> gpg,
+  @{bin}/zstd    ix,
+
+  /var/cache/apt/archives/*.deb r,
+
+  owner @{user_projects_dirs}/** rw,
+  owner @{user_build_dirs}/** rw,
+
+  owner @{user_pkg_dirs}/ rw,
+  owner @{user_pkg_dirs}/** rwlk,
+
+  # For package building
+  owner @{user_build_dirs}/pbuilder/result/*.{dsc,changes} r,
+  owner @{user_build_dirs}/pbuilder/result/*.deb r,
+  owner @{user_build_dirs}/pbuilder/result/*.tar.* r,
+
+  owner @{PROC}/@{pid}/fd/ r,
+
+  profile gpg flags=(complain) {
+    include <abstractions/base-strict>
+
+    @{bin}/gpgconf mr,
+    @{bin}/gpg{,2} mr,
+    @{bin}/gpgsm mr,
+
+    owner @{HOME}/@{XDG_GPG_DIR}/ rw,
+    owner @{HOME}/@{XDG_GPG_DIR}/** rwkl -> @{HOME}/@{XDG_GPG_DIR}/**,
+
+    owner @{run}/user/@{uid}/gnupg/S.gpg-agent rw,
+
+    include if exists <local/reprepro_gpg>
+  }
+
+  include if exists <local/reprepro>
+}
+
+# vim:syntax=apparmor

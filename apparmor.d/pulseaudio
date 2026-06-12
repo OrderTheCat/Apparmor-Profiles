@@ -1,0 +1,186 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2017-2021 Mikhail Morfikov
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# Copyright (C) 2022 Jeroen Rijken
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/pulseaudio
+@{att} = ""
+profile pulseaudio /{,usr/}bin/pulseaudio flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/audio-server>
+  include <abstractions/bus/system/org.bluez>
+  include <abstractions/bus/system/org.freedesktop.Avahi.Server>
+  include <abstractions/bus/system/org.freedesktop.Avahi.ServiceBrowser>
+  include <abstractions/bus/system/org.freedesktop.Avahi.ServiceResolver>
+  include <abstractions/bus/system/org.freedesktop.hostname1>
+  include <abstractions/bus/system/org.freedesktop.RealtimeKit1>
+  include <abstractions/camera>
+  include <abstractions/consoles>
+  include <abstractions/dconf-write>
+  include <abstractions/desktop>
+  include <abstractions/dri>
+  include <abstractions/fontconfig-cache-write>
+  include <abstractions/gstreamer>
+  include <abstractions/hosts_access>
+  include <abstractions/media-control>
+  include <abstractions/nameservice-strict>
+  include <abstractions/sys/dmi>
+
+  ptrace trace peer=@{profile_name},
+
+  signal receive peer=pacmd,
+
+  network inet stream,
+  network inet6 stream,
+  network netlink raw,
+
+  network bluetooth stream,
+  network bluetooth seqpacket,
+
+  #aa/dbus own bus=session name=org.freedesktop.ReserveDevice1.Audio@{int}
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.freedesktop.ReserveDevice1.Audio@{int}{,.*},
+  dbus receive bus=session path=/org/freedesktop/ReserveDevice1/Audio@{int}{,/**}
+       interface=org.freedesktop.ReserveDevice1.Audio@{int}{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/freedesktop/ReserveDevice1/Audio@{int}{,/**}
+       interface=org.freedesktop.ReserveDevice1.Audio@{int}{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/freedesktop/ReserveDevice1/Audio@{int}{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/freedesktop/ReserveDevice1/Audio@{int}{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/freedesktop/ReserveDevice1/Audio@{int}{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.ReserveDevice1.Audio@{int}{,.*}}"),
+  dbus send bus=session path=/org/freedesktop/ReserveDevice1/Audio@{int}{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=session name=org.PulseAudio1
+  dbus bind bus=session name=org.PulseAudio1{,.*},
+  dbus receive bus=session path=/org/PulseAudio1{,/**}
+       interface=org.PulseAudio1{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/PulseAudio1{,/**}
+       interface=org.PulseAudio1{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/PulseAudio1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/PulseAudio1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/PulseAudio1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.PulseAudio1{,.*}}"),
+  dbus send bus=session path=/org/PulseAudio1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=session name=org.pulseaudio*
+  dbus bind bus=session name=org.pulseaudio*{,.*},
+  dbus receive bus=session path=/org/pulseaudio*{,/**}
+       interface=org.pulseaudio*{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/pulseaudio*{,/**}
+       interface=org.pulseaudio*{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/pulseaudio*{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/pulseaudio*{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/pulseaudio*{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.pulseaudio*{,.*}}"),
+  dbus send bus=session path=/org/pulseaudio*{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  dbus receive bus=session
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name=@{busname}, label="{gnome-shell,gnome-extension}"),
+
+  dbus send bus=system path=/
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name=org.bluez),
+
+  @{exec_path} mrix,
+
+  @{lib}/pulse/gsettings-helper rix,
+  @{lib}/@{multiarch}/pulse/gconf-helper rix,
+  @{lib}/pulse-*/modules/*.so mr,
+
+  /usr/share/ladspa/rdf/{,*} r,
+  /usr/share/pulseaudio/{,**} r,
+
+  /etc/pulse/{,**} r,
+
+  / r,
+
+  owner @{desktop_config_dirs}/pulse/{,**} rw,
+  owner @{desktop_config_dirs}/pulse/cookie k,
+
+  owner @{HOME}/.pulse/{,**} rw,
+  owner @{user_config_dirs}/ w,
+  owner @{user_config_dirs}/pulse/{,**} rw,
+
+  owner @{run}/user/@{uid}/ rw,
+  owner @{run}/user/@{uid}/pulse/ rw,
+  owner @{run}/user/@{uid}/pulse/** rwk,
+  owner @{run}/user/@{uid}/systemd/notify rw,
+
+  @{run}/systemd/users/@{uid} r,
+
+  @{run}/udev/data/+pci:* r,              # Identifies all PCI devices (CPU, GPU, Network, Disks, USB, etc.)
+  @{run}/udev/data/c116:@{int} r,         # for ALSA
+  @{run}/udev/data/c@{dynamic}:@{int} r,  # For dynamic assignment range 234 to 254, 384 to 511
+
+  @{sys}/devices/**/sound/**/{uevent,pcm_class} r,
+
+  deny @{sys}/module/apparmor/parameters/enabled r,
+
+  owner @{PROC}/@{pids}/fd/ r,
+  owner @{PROC}/@{pids}/stat r,
+  owner @{PROC}/@{pids}/cmdline r,
+
+  # file_inherit
+  owner /dev/tty@{u8} rw,
+
+  include if exists <local/pulseaudio>
+}
+
+# vim:syntax=apparmor

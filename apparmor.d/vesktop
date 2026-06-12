@@ -1,0 +1,55 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 odomingao
+# Copyright (C) 2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{name} = vesktop
+@{domain} = org.chromium.Chromium
+@{lib_dirs} = @{lib}/@{name}
+@{config_dirs} = @{user_config_dirs}/@{name}
+@{cache_dirs} = @{user_cache_dirs}/@{name}
+
+@{exec_path} = @{bin}/vesktop @{lib_dirs}/vesktop
+@{att} = /att/vesktop/
+profile vesktop /{{,usr/}bin/vesktop,{,usr/}lib{,exec,32,64}/vesktop/vesktop} flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/audio-client>
+  include <abstractions/common/electron>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/p11-kit>
+  include <abstractions/user-download-strict>
+  include <abstractions/video>
+  include <abstractions/camera>
+
+  network inet dgram,
+  network inet6 dgram,
+  network inet stream,
+  network inet6 stream,
+  network netlink raw,
+
+  @{exec_path} mrix,
+
+  @{bin}/speech-dispatcher rpx,
+  @{open_path}             rpx -> child-open-strict,
+
+  owner @{user_videos_dirs}/{,**} rwl,
+  owner @{user_pictures_dirs}/{,**} rwl,
+
+  owner /tmp/.org.chromium.Chromium.* rwm,
+  owner @{run}/user/@{uid}/discord-ipc-@{int} rw,
+
+  @{sys}/devices/@{pci}/usb@{int}/**/interface r,
+
+  owner /dev/ r,
+
+  deny       /dev/tty rw,
+  deny owner /dev/tty@{u8} rw,
+
+  include if exists <local/vesktop>
+}
+
+# vim:syntax=apparmor

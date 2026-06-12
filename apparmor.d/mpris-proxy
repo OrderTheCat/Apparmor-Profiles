@@ -1,0 +1,118 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/mpris-proxy
+@{att} = ""
+profile mpris-proxy /{,usr/}bin/mpris-proxy flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/bluetooth-control>
+  include <abstractions/bus-session>
+  include <abstractions/bus-system>
+
+  #aa/dbus own bus=session name=org.mpris.MediaPlayer2
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.mpris.MediaPlayer2{,.*},
+  dbus receive bus=session path=/org/mpris/MediaPlayer2{,/**}
+       interface=org.mpris.MediaPlayer2{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/mpris/MediaPlayer2{,/**}
+       interface=org.mpris.MediaPlayer2{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/mpris/MediaPlayer2{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/mpris/MediaPlayer2{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/mpris/MediaPlayer2{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.mpris.MediaPlayer2{,.*}}"),
+  dbus send bus=session path=/org/mpris/MediaPlayer2{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=system name=org.mpris.MediaPlayer2.Player path=/{,**}
+  include <abstractions/bus/system/own>
+  dbus bind bus=system name=org.mpris.MediaPlayer2.Player{,.*},
+  dbus receive bus=system path=/{,**}
+       interface=org.mpris.MediaPlayer2.Player{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=system path=/{,**}
+       interface=org.mpris.MediaPlayer2.Player{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=system path=/{,**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=system path=/{,**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=system path=/{,**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.mpris.MediaPlayer2.Player{,.*}}"),
+  dbus send bus=system path=/{,**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  #aa/dbus see bus=session name=org.bluez.obex path=/ label=obexd
+
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=obexd),
+
+  # DBus.Properties: read all properties from the interface
+
+  dbus send bus=session path=/
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll}
+       peer=(name="{@{busname},org.bluez.obex{,.*}}", label=obexd),
+
+  # DBus.Properties: receive property changed events
+
+  dbus receive bus=session path=/
+       interface=org.freedesktop.DBus.Properties
+       member=PropertiesChanged
+       peer=(name="{@{busname},org.bluez.obex{,.*}}", label=obexd),
+
+  # DBus.Introspectable: allow service introspection
+
+  dbus send bus=session path=/
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.bluez.obex{,.*}}", label=obexd),
+
+  dbus send bus=session path=/org/mpris/MediaPlayer2
+       interface=org.freedesktop.DBus.Properties
+       member=GetAll
+       peer=(name=org.mpris.MediaPlayer2.*, label="*"),
+
+  # DBus.Introspectable: allow introspection from gnome-shell
+  dbus receive bus=session
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name=@{busname}, label="{gnome-shell,gnome-extension}"),
+
+  @{exec_path} mr,
+
+  include if exists <local/mpris-proxy>
+}
+
+# vim:syntax=apparmor

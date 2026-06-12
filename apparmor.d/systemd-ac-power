@@ -1,0 +1,23 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2018-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/systemd/systemd-ac-power
+@{att} = ""
+profile systemd-ac-power /{,usr/}lib{,exec,32,64}/systemd/systemd-ac-power flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/sys/power-supply>
+
+  @{exec_path} mr,
+
+  owner @{PROC}/@{pid}/stat r,
+
+  include if exists <local/systemd-ac-power>
+}
+
+# vim:syntax=apparmor

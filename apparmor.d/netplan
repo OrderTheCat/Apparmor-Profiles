@@ -1,0 +1,92 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = /usr/share/netplan/netplan.script
+@{att} = /att/netplan/
+profile netplan /usr/share/netplan/netplan.script flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-system>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/python>
+
+  #aa/dbus own bus=system name=io.netplan.Netplan
+  include <abstractions/bus/system/own>
+  dbus bind bus=system name=io.netplan.Netplan{,.*},
+  dbus receive bus=system path=/io/netplan/Netplan{,/**}
+       interface=io.netplan.Netplan{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=system path=/io/netplan/Netplan{,/**}
+       interface=io.netplan.Netplan{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=system path=/io/netplan/Netplan{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=system path=/io/netplan/Netplan{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=system path=/io/netplan/Netplan{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},io.netplan.Netplan{,.*}}"),
+  dbus send bus=system path=/io/netplan/Netplan{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  @{exec_path} mr,
+
+  @{bin}/ip                rpx,
+  @{bin}/networkctl        rpx,
+  @{bin}/nmcli             rpx,
+  @{bin}/ovs-vsctl        rpux,
+  @{bin}/systemctl         rcx -> systemctl,
+  @{bin}/udevadm           rpx,
+  @{lib}/netplan/generate  rpx,
+
+  /usr/share/netplan/{,**} r,
+
+  /etc/netplan/{,*} r,
+
+  @{run}/netplan/ r,
+  @{run}/NetworkManager/system-connections/netplan-* r,
+  @{run}/systemd/network/ r,
+  @{run}/systemd/system/ r,
+  @{run}/systemd/system/systemd-networkd.service.wants/ r,
+
+  /tmp/@{word8} rw,
+  /tmp/#@{int} rw,
+  /tmp/netplan_@{word8}/{,**} rw,
+  /tmp/tmp@{word8}/{,**} rwlk,
+
+  profile systemctl flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/app/systemctl>
+
+    capability net_admin,
+    capability sys_resource,
+
+    ptrace read peer=@{p_systemd},
+
+    signal send set=(cont term) peer=systemd-tty-ask-password-agent,
+
+    @{run}/udev/control rw,
+    @{bin}/systemd-tty-ask-password-agent rpx,
+
+    include if exists <local/netplan_systemctl>
+  }
+
+  include if exists <local/netplan>
+}
+
+# vim:syntax=apparmor

@@ -1,0 +1,80 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/virtiofsd @{lib}/qemu/virtiofsd @{bin}/virtiofsd
+@{att} = /att/virtiofsd/
+profile virtiofsd /{{,usr/}lib{,exec,32,64}/virtiofsd,{,usr/}lib{,exec,32,64}/qemu/virtiofsd,{,usr/}bin/virtiofsd} flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+
+  userns,
+
+  capability chown,
+  capability dac_override,
+  capability dac_read_search,
+  capability fowner,
+  capability fsetid,
+  capability mknod,
+  capability setfcap,
+  capability setgid,
+  capability setpcap,
+  capability setuid,
+  capability sys_admin,
+  capability sys_resource,
+
+  mount options=(rw, bind) @{PROC}/1/fd/ -> @{PROC},
+  mount options=(rw, nosuid, nodev, noexec, relatime) -> @{PROC},
+  mount options=(rw, make-rslave) /,
+
+  mount options=(rw, rbind) -> @{user_projects_dirs}/{,**/},
+  mount options=(rw, rbind) -> @{user_publicshare_dirs}/{,**/},
+  mount options=(rw, rbind) -> @{user_vm_dirs}/{,**/},
+  mount options=(rw, rbind) -> @{user_vmshare_dirs}/{,**/},
+
+  umount /,
+
+  # TODO: -> pivoted
+  pivot_root oldroot=@{user_projects_dirs}/{,**/}    @{user_projects_dirs}/{,**/},
+  pivot_root oldroot=@{user_publicshare_dirs}/{,**/} @{user_publicshare_dirs}/{,**/},
+  pivot_root oldroot=@{user_vm_dirs}/{,**/}          @{user_vm_dirs}/{,**/},
+  pivot_root oldroot=@{user_vmshare_dirs}/{,**/}     @{user_vmshare_dirs}/{,**/},
+
+  signal (receive) set=term peer=libvirtd,
+
+  unix (send, receive) type=stream peer=(addr=none, label=libvirt-@{uuid}),
+
+  @{exec_path} mr,
+
+  / r,
+  /var/lib/libvirt/qemu/*/fs@{int}-fs.sock rw,
+
+  @{user_projects_dirs}/{,**} r,
+  @{user_publicshare_dirs}/{,**} r,
+  @{user_vm_dirs}/{,**} r,
+  @{user_vmshare_dirs}/{,**} r,
+
+  owner @{run}/libvirt/qemu/*.pid rw,
+
+  @{att}/@{pid}/mountinfo r,
+
+  @{PROC}/ r,
+  @{PROC}/@{pid}/gid_map r,
+  @{PROC}/@{pid}/setgroups r,
+  @{PROC}/@{pid}/uid_map r,
+  @{PROC}/sys/fs/file-max r,
+  @{PROC}/sys/fs/nr_open r,
+
+  # Allow read/write access to the shared directories
+  /{,**} rwl,
+  # profile pivoted {
+  #   /{,**} rwl,
+  # }
+
+  include if exists <local/virtiofsd>
+}
+
+# vim:syntax=apparmor

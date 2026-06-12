@@ -1,0 +1,47 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{sbin}/locale-gen
+@{att} = ""
+profile locale-gen /{,usr/}{,s}bin/locale-gen flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/consoles>
+  include <abstractions/nameservice-strict>
+  include <abstractions/perl>
+
+  capability dac_read_search,
+
+  @{exec_path} mr,
+
+  @{sh_path}        rix,
+  @{bin}/{e,}grep   rix,
+  @{bin}/cat        rix,
+  @{bin}/gzip       rix,
+  @{bin}/localedef  rix,
+  @{bin}/rm         rix,
+  @{bin}/sed        rix,
+  @{bin}/sort       rix,
+
+  @{lib}/locale/locale-archive rwl,
+  @{lib}/locale/locale-archive* rw,
+
+  /usr/share/i18n/{,**} r,
+
+  /etc/locale.gen rw,
+  /etc/sed@{rand6} rw,
+
+  /var/lib/locales/supported.d/{,**} r,
+
+  # Inherit Silencer
+  deny network inet6 stream,
+  deny network inet stream,
+
+  include if exists <local/locale-gen>
+}
+
+# vim:syntax=apparmor

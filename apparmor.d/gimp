@@ -1,0 +1,145 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/gimp{,-*}
+@{att} = /att/gimp/
+profile gimp /{,usr/}bin/gimp{,-*} flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/audio-client>
+  include <abstractions/bus/session/org.freedesktop.FileManager1>
+  include <abstractions/dconf-write>
+  include <abstractions/desktop>
+  include <abstractions/graphics>
+  include <abstractions/gvfs>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/python>
+  include <abstractions/thumbnails-cache-write>
+  include <abstractions/user-download-strict>
+
+  signal (send) set=(term, kill) peer=xsane-gimp,
+
+  #aa/dbus own bus=session name=org.gimp
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gimp{,.*},
+  dbus receive bus=session path=/org/gimp{,/**}
+       interface=org.gimp{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gimp{,/**}
+       interface=org.gimp{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gimp{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gimp{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gimp{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gimp{,.*}}"),
+  dbus send bus=session path=/org/gimp{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  #aa/dbus talk bus=session name=org.gnome.Shell.Screenshot label=gnome-shell
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=gnome-shell),
+  # org.gnome.Shell.Screenshot: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/gnome/Shell/Screenshot{,/**}
+       interface=org.gnome.Shell.Screenshot{,.*}
+       peer=(name="{@{busname},org.gnome.Shell.Screenshot{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  dbus send bus=session path=/org/gnome/Shell/Screenshot{,/**}
+       interface=org.gnome.Shell.Screenshot{,.*}
+       peer=(name="org.gnome.Shell.Screenshot{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/gnome/Shell/Screenshot{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gnome.Shell.Screenshot{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/gnome/Shell/Screenshot{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gnome.Shell.Screenshot{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/gnome/Shell/Screenshot{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.Shell.Screenshot{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  dbus receive bus=session path=/org/gnome/Shell/Screenshot{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gnome.Shell.Screenshot{,.*},org.freedesktop.DBus}", label=gnome-shell),
+
+
+  @{exec_path} mr,
+
+  @{python_path}                         rix,
+  @{bin}/env                             rix,
+  @{bin}/gimp-debug-tool-3.0             rix,
+  @{bin}/gimp-script-fu-interpreter-*    rix,
+  @{bin}/gjs-console                     rix,
+  @{bin}/lua                             rix,
+  @{lib}/gimp/@{version}/extensions/*/*  rix,
+  @{lib}/gimp/*/plug-ins/**              rix,
+
+  @{bin}/darktable  rpux,
+  @{bin}/xsane-gimp rpx,
+  @{open_path}      rpx -> child-open-help,
+
+  @{lib}/gimp/@{version}/plug-ins/python-console/__pycache__/{,*} w,
+  @{lib}/@{multiarch}/gimp/@{version}/plug-ins/** ix,
+
+  /usr/share/gimp/{,**} r,
+  /usr/share/mypaint-data/{,**} r,
+  /usr/share/xml/iso-codes/{,**} r,
+
+  /etc/fstab r,
+  /etc/gimp/{,**} r,
+
+  owner @{HOME}/@{XDG_SCREENSHOTS_DIR}/{,**} rw,
+  owner @{HOME}/@{XDG_WALLPAPERS_DIR}/{,**} rw,
+
+  owner @{user_documents_dirs}/{,**} rw,
+  owner @{user_pictures_dirs}/{,**} rw,
+  owner @{user_work_dirs}/{,**} rw,
+
+  owner @{user_cache_dirs}//thumbnails/normal/gimp-thumb* rw,
+  owner @{user_cache_dirs}/babl/{,**} rw,
+  owner @{user_cache_dirs}/gegl-@{version}/{,**} rw,
+  owner @{user_cache_dirs}/gegl-@{version}/{,**} rw,
+  owner @{user_cache_dirs}/gimp/{,**} rw,
+  owner @{user_cache_dirs}/GIMP/{,**} rw,
+
+  owner @{user_config_dirs}/gimp/{,**} rw,
+  owner @{user_config_dirs}/GIMP/{,**} rw,
+
+  owner @{user_share_dirs}/gegl-@{version}/{,**} r,
+  owner @{user_share_dirs}/GIMP/{,**} rw,
+
+  owner @{tmp}/gimp/{,**} rw,
+
+  @{run}/mount/utab r,
+
+  owner @{PROC}/@{pid}/cgroup r,
+  owner @{PROC}/@{pid}/mountinfo r,
+  owner @{PROC}/@{pid}/mounts r,
+  owner @{PROC}/@{pid}/stat r,
+  owner @{PROC}/@{pid}/task/@{tid}/stat r,
+
+  include if exists <local/gimp>
+}
+
+# vim:syntax=apparmor

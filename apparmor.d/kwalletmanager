@@ -1,0 +1,50 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2018-2021 Mikhail Morfikov
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/kwalletmanager{5,6}
+@{att} = ""
+profile kwalletmanager /{,usr/}bin/kwalletmanager{5,6} flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/audio-client>
+  include <abstractions/consoles>
+  include <abstractions/fontconfig-cache-read>
+  include <abstractions/graphics>
+  include <abstractions/kde-strict>
+  include <abstractions/nameservice-strict>
+  include <abstractions/qt5-compose-cache-write>
+  include <abstractions/qt5-settings-write>
+  include <abstractions/user-download-strict>
+
+  @{exec_path} mr,
+
+  /usr/share/kxmlgui5/kwalletmanager5/kwalletmanager.rc r,
+
+  /etc/fstab r,
+  /etc/machine-id r,
+  /etc/xdg/ui/ui_standards.rc r,
+  /var/lib/dbus/machine-id r,
+
+  owner @{user_config_dirs}/#@{int} rw,
+  owner @{user_config_dirs}/kwalletmanager5rc rw,
+  owner @{user_config_dirs}/kwalletmanager5rc.* rwl -> @{user_config_dirs}/#@{int},
+  owner @{user_config_dirs}/kwalletmanager5rc.lock rwk,
+  owner @{user_config_dirs}/kwalletrc rw,
+  owner @{user_config_dirs}/kwalletrc.* rwl -> @{user_config_dirs}/#@{int},
+  owner @{user_config_dirs}/kwalletrc.lock rwk,
+
+        @{PROC}/@{pid}/mountinfo r,
+        @{PROC}/@{pid}/mounts r,
+  owner @{PROC}/@{pid}/cmdline r,
+
+  /dev/shm/#@{int} rw,
+
+  include if exists <local/kwalletmanager>
+}
+
+# vim:syntax=apparmor

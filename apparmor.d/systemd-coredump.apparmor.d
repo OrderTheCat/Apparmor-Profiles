@@ -1,0 +1,81 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/systemd/systemd-coredump
+@{att} = /att/systemd-coredump/
+profile systemd-coredump /{,usr/}lib{,exec,32,64}/systemd/systemd-coredump flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-system>
+  include <abstractions/common/systemd>
+  include <abstractions/attached/nameservice-strict>
+
+  userns,
+
+  capability dac_override,
+  capability dac_read_search,
+  capability kill,
+  capability net_admin,
+  capability setgid,
+  capability setpcap,
+  capability setuid,
+  capability sys_admin,
+  capability sys_ptrace,
+
+  mount -> /,
+
+  ptrace (read),
+
+  @{exec_path} mr,
+
+  @{lib}/** r,
+  / r,
+  @{bin}/* r,
+  @{sbin}/* r,
+  /opt/** r,
+  /usr/share/*/** r,
+  @{user_lib_dirs}/** r,
+  /snap/*/@{int}/bin/** r,
+  /snap/*/@{int}/opt/** r,
+  /snap/*/@{int}/usr/** r,
+  @{att}/ r,
+
+  /etc/systemd/coredump.conf r,
+  /etc/systemd/coredump.conf.d/{,**} r,
+
+  owner @{HOME}/**.so* r,
+  owner @{HOME}/.var/app/*/** r, # Crash from flatpak apps
+
+  /var/lib/systemd/coredump/{,**} rwl,
+
+  owner @{run}/user/@{uid}/snap.*/.org.chromium.Chromium.@{rand6} r,
+
+        @{run}/systemd/coredump rw,
+  @{att}@{run}/systemd/coredump rw,
+
+        @{PROC}/@{pids}/auxv r,
+        @{PROC}/@{pids}/cgroup r,
+        @{PROC}/@{pids}/cmdline r,
+        @{PROC}/@{pids}/comm r,
+        @{PROC}/@{pids}/environ r,
+        @{PROC}/@{pids}/fd/ r,
+        @{PROC}/@{pids}/fdinfo/@{int} r,
+        @{PROC}/@{pids}/gid_map r,
+        @{PROC}/@{pids}/limits r,
+        @{PROC}/@{pids}/maps r,
+        @{PROC}/@{pids}/mountinfo r,
+        @{PROC}/@{pids}/ns/ r,
+        @{PROC}/@{pids}/stat r,
+        @{PROC}/@{pids}/status r,
+        @{PROC}/sys/kernel/core_pattern w,
+  owner @{PROC}/@{pid}/setgroups r,
+
+  include if exists <local/systemd-coredump>
+}
+
+# vim:syntax=apparmor

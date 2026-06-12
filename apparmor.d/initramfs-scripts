@@ -1,0 +1,57 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = /usr/share/initramfs-tools/scripts/** /etc/initramfs-tools/scripts/**
+@{att} = ""
+profile initramfs-scripts /{usr/share/initramfs-tools/scripts/**,etc/initramfs-tools/scripts/**} flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/consoles>
+
+  @{exec_path} mr,
+
+  @{sh_path}                         rix,
+  @{coreutils_path}                  rix,
+  @{sbin}/blkid                       px,
+  @{bin}/dd                           ix,
+  @{bin}/debconf-escape               px,
+  @{bin}/ischroot                     px,
+  @{ldd_path}                         cx -> ldd,
+  @{bin}/plymouth                     px,
+  @{bin}/update-alternatives          px,
+  @{lib}/dracut/dracut-install        px,
+  @{lib}/initramfs-tools/bin/busybox  px,
+  /usr/share/mdadm/mkconf             px,
+
+  /usr/share/initramfs-tools/{,**} r,
+
+  /etc/cryptsetup-initramfs/{,**} r,
+  /etc/crypttab r,
+  /etc/default/console-setup r,
+  /etc/fstab r,
+  /etc/initramfs-tools/{,**} r,
+  /etc/mdadm/mdadm.conf r,
+  /etc/udev/rules.d/{,**} r,
+
+        /var/tmp/modules_@{rand6} rw,
+  owner /var/tmp/mkinitramfs_@{rand6}/** rwl -> /var/tmp/mkinitramfs_@{rand6}/**,
+
+  /tmp/tmp.@{rand10}/mkinitramfs_@{rand6}/** rwl -> /tmp/tmp.@{rand10}/mkinitramfs_@{rand6}/**,
+
+  profile ldd flags=(complain) {
+    include <abstractions/base-strict>
+    include <abstractions/nameservice-strict>
+
+    @{ldd_path}  mrix,
+
+    include if exists <local/initramfs-scripts_ldd>
+  }
+
+  include if exists <local/initramfs-scripts>
+}
+
+# vim:syntax=apparmor

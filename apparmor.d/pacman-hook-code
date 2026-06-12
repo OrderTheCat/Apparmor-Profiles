@@ -1,0 +1,36 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = /usr/share/code-{features,marketplace}{,-insiders}/patch.py
+@{att} = ""
+profile pacman-hook-code /usr/share/code-{features,marketplace}{,-insiders}/patch.py flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/consoles>
+  include <abstractions/python>
+
+  capability dac_read_search,
+
+  @{exec_path} mr,
+
+  @{bin}/env r,
+  @{python_path} rix,
+
+  @{lib}/code/product.json rw,
+  @{lib}/code/out/vs/code/electron-utility/sharedProcess/sharedProcessMain.js w,
+
+  /usr/share/code-{features,marketplace}{,-insiders}/{,*} r,
+  /usr/share/code-{features,marketplace}{,-insiders}/cache.json rw,
+
+  # File Inherit
+  deny network inet stream,
+  deny network inet6 stream,
+
+  include if exists <local/pacman-hook-code>
+}
+
+# vim:syntax=apparmor

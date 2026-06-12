@@ -1,0 +1,59 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+# Allow operating as an MPRIS player.
+
+  abi <abi/4.0>,
+
+  include <abstractions/bus/session/org.mpris.MediaPlayer2.Player>
+
+  # Allow binding to the well-known DBus mpris interface based on the app's name
+  # See: https://specifications.freedesktop.org/mpris-spec/latest/
+  #aa/dbus own bus=session name=org.mpris.MediaPlayer2.@{profile_name}
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.mpris.MediaPlayer2.@{profile_name}{,.*},
+  dbus receive bus=session path=/org/mpris/MediaPlayer2/@{profile_name}{,/**}
+       interface=org.mpris.MediaPlayer2.@{profile_name}{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/mpris/MediaPlayer2/@{profile_name}{,/**}
+       interface=org.mpris.MediaPlayer2.@{profile_name}{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/mpris/MediaPlayer2/@{profile_name}{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/mpris/MediaPlayer2/@{profile_name}{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/mpris/MediaPlayer2/@{profile_name}{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.mpris.MediaPlayer2.@{profile_name}{,.*}}"),
+  dbus send bus=session path=/org/mpris/MediaPlayer2/@{profile_name}{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  # DBus.Properties: receive properties from any mpris controller
+
+  dbus receive bus=system path=/org/mpris/MediaPlayer2
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll}
+       peer=(name=@{busname}, label="@{pp_mpris}"),
+
+  # DBus.Properties: send property changed events to any mpris controller
+
+  dbus send bus=session path=/org/mpris/MediaPlayer2
+       interface=org.freedesktop.DBus.Properties
+       member=PropertiesChanged
+       peer=(name=org.freedesktop.DBus, label="@{pp_mpris}"),
+
+  include if exists <abstractions/mpris.d>
+
+# vim:syntax=apparmor

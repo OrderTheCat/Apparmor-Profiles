@@ -1,0 +1,30 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2022 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/mtr
+@{att} = ""
+profile mtr /{,usr/}bin/mtr flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/desktop>
+  include <abstractions/nameservice-strict>
+
+  network inet dgram,
+  network inet6 dgram,
+  network netlink raw,
+
+  signal (send) set=(term, kill) peer=mtr-packet,
+
+  @{exec_path} mr,
+
+  @{bin}/mtr-packet rpx,
+
+  include if exists <local/mtr>
+}
+
+# vim:syntax=apparmor

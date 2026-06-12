@@ -1,0 +1,84 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2018-2021 Mikhail Morfikov
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/sddm-greeter{,-qt6}
+@{att} = /att/sddm-greeter/
+profile sddm-greeter /{,usr/}bin/sddm-greeter{,-qt6} flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus/system/org.freedesktop.login1>
+  include <abstractions/fontconfig-cache-write>
+  include <abstractions/graphics>
+  include <abstractions/kde-strict>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/qt5-compose-cache-write>
+  include <abstractions/qt5-shader-cache>
+  include <abstractions/upower-observe>
+
+  network netlink raw,
+
+  signal receive set=term peer=sddm,
+
+  dbus send bus=system path=/org/freedesktop/DBus
+       interface=org.freedesktop.DBus
+       member=ListActivatableNames
+       peer=(name=org.freedesktop.DBus, label="@{p_dbus_system}"),
+
+  @{exec_path} mr,
+
+  @{lib}/libheif/ r,
+  @{lib}/libheif/*.so* rm,
+
+  /usr/share/endeavouros/backgrounds/** r,
+  /usr/share/hunspell/** r,
+  /usr/share/plasma/desktoptheme/** r,
+  /usr/share/sddm/{,**} r,
+  /usr/share/wallpapers/{,**} r,
+  /usr/share/wayland-sessions/{,*.desktop} r,
+  /usr/share/xsessions/{,*.desktop} r,
+
+  /etc/fstab r,
+  /etc/os-release r,
+  /etc/sddm.conf r,
+  /etc/sddm.conf.d/{,*} r,
+  /etc/xdg/plasmarc r,
+
+  /var/lib/AccountsService/icons/* r,
+
+        @{SDDM_HOME}/state.conf r,
+  owner @{SDDM_HOME}/** rw,
+  owner @{SDDM_HOME}/#@{int} mrw,
+  owner @{sddm_cache_dirs}/** mrwkl -> @{sddm_cache_dirs}/**,
+
+  @{HOME}/.face.icon r,
+
+  owner @{user_cache_dirs}/ rw,
+  owner @{user_cache_dirs}/plasma_theme_*.kcache rw,
+  owner @{user_cache_dirs}/plasma-svgelements rw,
+  owner @{user_cache_dirs}/plasma-svgelements.@{rand6} rw,
+  owner @{user_cache_dirs}/plasma-svgelements.lock rwk,
+  owner @{user_cache_dirs}/sddm-greeter/{,**} rwl,
+
+  owner @{user_config_dirs}/plasmarc r,
+
+  # If one is blocked, the others are probed.
+  deny owner @{HOME}/#@{int} mrw,
+       owner @{HOME}/.glvnd* mrw,
+
+  owner @{tmp}/runtime-sddm/ rw,
+  owner @{tmp}/sddm-:@{int}-@{rand6} rw,
+
+  owner @{run}/sddm/{,*} rw,
+
+  owner @{PROC}/@{pid}/cmdline r,
+  owner @{PROC}/@{pid}/mounts r,
+
+  include if exists <local/sddm-greeter>
+}
+
+# vim:syntax=apparmor

@@ -1,0 +1,92 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/systemd/systemd-homework
+@{att} = /att/systemd-homework/
+profile systemd-homework /{,usr/}lib{,exec,32,64}/systemd/systemd-homework flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/common/systemd>
+  include <abstractions/disks-write>
+  include <abstractions/attached/nameservice-strict>
+
+  userns,
+
+  capability chown,
+  capability dac_read_search,
+  capability fowner,
+  capability fsetid,
+  capability setfcap,
+  capability setgid,
+  capability setuid,
+  capability sys_admin,
+  capability sys_ptrace,
+  capability sys_resource,
+
+  network netlink raw,
+
+  mount                                                           -> @{run}/systemd/user-home-mount/,
+  mount options=(rw bind) @{run}/systemd/user-home-mount/@{user}/ -> @{HOME}/,
+  mount options=(rw make-rslave)                                     @{run}/,
+  mount options=(rw move)                                         -> @{run}/systemd/user-home-mount/@{user}/,
+
+  umount @{run}/systemd/user-home-mount/,
+  umount @{run}/systemd/user-home-mount/@{user}/,
+
+  unix send type=dgram peer=(label=systemd-homed),
+
+  signal (send receive) set=kill peer=systemd-homed//&systemd-homework,
+
+  ptrace read peer=systemd-homed//&systemd-homework,
+
+  @{exec_path} mr,
+
+  @{sbin}/fsck       rix, # no new privs
+  @{sbin}/fsck.*     rix,
+  @{sbin}/mke2fs     rpx,
+  @{sbin}/mkfs.btrfs rpx,
+  @{sbin}/mkfs.fat   rpx,
+
+  /etc/machine-id r,
+  /etc/skel/{,**} r,
+  /etc/fstab r,
+
+  /var/cache/systemd/home/{,**} rw,
+
+  @{HOMEDIRS}/ r,
+  @{HOMEDIRS}/.#homework@{user}.* rw,
+  @{HOMEDIRS}/@{user}.home rwk,
+
+  @{HOME}/ r,
+  @{HOME}/.identity r,
+
+  @{run}/ r,
+  @{run}/cryptsetup/ r,
+  @{run}/cryptsetup/* rwk,
+  @{run}/systemd/user-home-mount/ rw,
+  @{run}/systemd/user-home-mount/@{user}/{,**} rw,
+
+  @{sys}/fs/ r,
+  @{sys}/devices/**/read_ahead_kb r,
+
+        @{PROC}/@{pid}/setgroups w,
+        @{PROC}/devices r,
+        @{PROC}/swaps r,
+        @{PROC}/sys/fs/nr_open r,
+  owner @{PROC}/@{pid}/gid_map w,
+  owner @{PROC}/@{pid}/mountinfo r,
+  owner @{PROC}/@{pid}/mounts r,
+  owner @{PROC}/@{pid}/uid_map w,
+
+  /dev/loop-control rwk,
+  /dev/loop@{int} rw,
+  /dev/mapper/control rw,
+
+  include if exists <local/systemd-homework>
+}
+
+# vim:syntax=apparmor

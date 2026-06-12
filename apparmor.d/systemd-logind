@@ -1,0 +1,214 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 Alexandre Pujol <alexandre@pujol.io>
+# Copyright (C) 2024 Jeroen Rijken
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/systemd/systemd-logind
+@{att} = /att/systemd-logind/
+profile systemd-logind /{,usr/}lib{,exec,32,64}/systemd/systemd-logind flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-system>
+  include <abstractions/bus/system/org.freedesktop.PolicyKit1>
+  include <abstractions/common/systemd>
+  include <abstractions/attached/consoles>
+  include <abstractions/devices-usb>
+  include <abstractions/disks-write>
+  include <abstractions/attached/nameservice-strict>
+
+  capability chown,
+  capability dac_override,
+  capability dac_read_search,
+  capability fowner,
+  capability sys_admin,
+  capability sys_tty_config,
+
+  network netlink raw,
+
+  mqueue getattr type=posix /,
+  mqueue r type=posix /,
+
+  unix bind type=stream addr=@@{udbus}/bus/systemd-logind/system,
+
+  #aa/dbus own bus=system name=org.freedesktop.login1
+  include <abstractions/bus/system/own>
+  dbus bind bus=system name=org.freedesktop.login1{,.*},
+  dbus receive bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.login1{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.login1{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.login1{,.*}}"),
+  dbus send bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  #aa/dbus talk bus=system name=org.freedesktop.systemd1 label="@{p_systemd}"
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label="@{p_systemd}"),
+  # org.freedesktop.systemd1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.systemd1{,.*}
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label="@{p_systemd}"),
+  dbus send bus=system path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.systemd1{,.*}
+       peer=(name="org.freedesktop.systemd1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label="@{p_systemd}"),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label="@{p_systemd}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label="@{p_systemd}"),
+  dbus receive bus=system path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label="@{p_systemd}"),
+
+
+  dbus receive bus=system path=/org/freedesktop/login@{int}{,/seat/auto,session/_@{int}}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(label=ksmserver-logout-greeter),
+
+  @{exec_path} mr,
+
+  /etc/machine-id r,
+  /etc/systemd/logind.conf r,
+  /etc/systemd/logind.conf.d/{,**} r,
+  /etc/systemd/sleep.conf r,
+  /etc/systemd/sleep.conf.d/{,**} r,
+
+  / r,
+  @{efi}/{,**} r,
+  /swap.img r,
+  /swap/swapfile r,
+  /swapfile r,
+
+  /var/lib/systemd/linger/{,@{user}} rw,
+
+  @{run}/.#nologin* rw,
+  @{run}/credentials/getty@tty@{int}.service/ r,
+  @{run}/host/container-manager r,
+  @{run}/nologin rw,
+  @{run}/utmp rk,
+
+  @{run}/udev/static_node-tags/uaccess/ r,
+  @{run}/udev/tags/master-of-seat/ r,
+  @{run}/udev/tags/power-switch/ r,
+  @{run}/udev/tags/uaccess/ r,
+  @{run}/udev/tags/xaccess-render/ r,
+
+  @{run}/udev/data/+backlight:* r,        # For display backlights on laptops, monitors, and other screens.
+  @{run}/udev/data/+drivers:* r,          # For drivers loaded in the system
+  @{run}/udev/data/+drm:card@{int}-* r,   # For screen outputs
+  @{run}/udev/data/+hid:* r,              # For Human Interface Device (mice, controllers, drawing tablets, scanners)
+  @{run}/udev/data/+i2c:* r,              # For Inter-Integrated Circuit, low-speed peripherals (sensors, EEPROMs, etc.)
+  @{run}/udev/data/+input:input@{int} r,  # for mouse, keyboard, touchpad
+  @{run}/udev/data/+leds:* r,             # Identifies all LEDs (keyboard, mouse, etc.)
+  @{run}/udev/data/+pci:* r,              # Identifies all PCI devices (CPU, GPU, Network, Disks, USB, etc.)
+  @{run}/udev/data/+wakeup:* r,           # For wakeup events (e.g., from sleep or hibernation)
+  @{run}/udev/data/c1:@{int}    r,        # For RAM disk
+  @{run}/udev/data/c4:@{int} r,           # For TTY devices
+  @{run}/udev/data/c5:@{int}   r,         # for /dev/tty, /dev/console, /dev/ptmx
+  @{run}/udev/data/c7:@{int} r,           # For Virtual console capture devices
+  @{run}/udev/data/c10:@{int}   r,        # For non-serial mice, misc features
+  @{run}/udev/data/c13:@{int} r,          # For /dev/input/*
+  @{run}/udev/data/c14:@{int} r,          # Open Sound System (OSS)
+  @{run}/udev/data/c21:@{int} r,          # Generic SCSI access
+  @{run}/udev/data/c29:@{int} r,          # For /dev/fb[0-9]*
+  @{run}/udev/data/c81:@{int}  r,         # For video4linux
+  @{run}/udev/data/c89:@{int} r,          # For I2C bus interface
+  @{run}/udev/data/c116:@{int} r,         # For ALSA
+  @{run}/udev/data/c202:@{int} r,         # CPU model-specific registers
+  @{run}/udev/data/c203:@{int} r,         # CPU CPUID information
+  @{run}/udev/data/c226:@{int} r,         # For DRI card /dev/dri/card@{int}
+  @{run}/udev/data/c@{dynamic}:@{int} r,  # For dynamic assignment range 234 to 254, 384 to 511
+
+  @{att}@{run}/systemd/userdb/io.systemd.DynamicUser rw,
+  @{att}@{run}/systemd/userdb/io.systemd.Multiplexer rw,
+
+  @{run}/systemd/inhibit/ rw,
+  @{run}/systemd/inhibit/* rwlk,
+  @{run}/systemd/seats/ rw,
+  @{run}/systemd/seats/* rwlk,
+  @{run}/systemd/sessions/ rw,
+  @{run}/systemd/sessions/* rwlk,
+  @{run}/systemd/shutdown/ rw,
+  @{run}/systemd/shutdown/* rwlk,
+  @{run}/systemd/users/ rw,
+  @{run}/systemd/users/* rwlk,
+
+  @{sys}/bus/serial-base/drivers/port/uevent r,
+  @{sys}/class/drm/ r,
+  @{sys}/class/power_supply/ r,
+  @{sys}/devices/** r,
+  @{sys}/devices/**/brightness rw,
+  @{sys}/devices/**/uevent rw,
+  @{sys}/devices/virtual/tty/tty@{int}/active r,
+  @{sys}/firmware/efi/efivars/LoaderEntries-@{uuid} r,
+  @{sys}/firmware/efi/efivars/LoaderFeatures-@{uuid} r,
+  @{sys}/firmware/efi/efivars/LoaderInfo-@{uuid} r,
+  @{sys}/firmware/efi/efivars/OsIndications-@{uuid} r,
+  @{sys}/firmware/efi/efivars/OsIndicationsSupported-@{uuid} r,
+  @{sys}/fs/cgroup/memory.max r,
+  @{sys}/fs/cgroup/memory/memory.limit_in_bytes r,
+  @{sys}/kernel/kexec_loaded r,
+  @{sys}/kernel/kexec/loaded r,
+  @{sys}/module/vt/parameters/default_utf8 r,
+  @{sys}/power/{state,resume_offset,resume,disk} r,
+
+        @{PROC}/@{pids}/cgroup r,
+        @{PROC}/@{pids}/comm r,
+        @{PROC}/@{pids}/fd/ r,
+        @{PROC}/@{pids}/mountinfo r,
+        @{PROC}/@{pids}/sessionid r,
+        @{PROC}/@{pids}/stat r,
+        @{PROC}/@{pids}/status r,
+        @{PROC}/1/cmdline r,
+        @{PROC}/pressure/* r,
+        @{PROC}/swaps r,
+        @{PROC}/sysvipc/{shm,sem,msg} r,
+  owner @{PROC}/@{pid}/fdinfo/@{int} r,
+
+        /dev/dri/card@{int} rw,
+  @{att}/dev/dri/card@{int} rw,
+
+  /dev/input/event@{int} rw,  # Input devices (keyboard, mouse, etc)
+  /dev/mqueue/ r,
+  /dev/tty@{u8} rw,
+  /dev/pts/@{u8} w,
+  /dev/shm/{,**} rw,
+
+  include if exists <local/systemd-logind>
+}
+
+# vim:syntax=apparmor

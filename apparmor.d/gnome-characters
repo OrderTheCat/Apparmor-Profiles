@@ -1,0 +1,67 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/gnome-characters /usr/share/org.gnome.Characters/org.gnome.Characters
+@{att} = /att/gnome-characters/
+profile gnome-characters /{{,usr/}bin/gnome-characters,usr/share/org.gnome.Characters/org.gnome.Characters} flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus/session/org.gnome.Shell.SearchProvider2>
+  include <abstractions/common/gnome>
+  include <abstractions/fontconfig-cache-read>
+  include <abstractions/attached/nameservice-strict>
+
+  #aa/dbus own bus=session name=org.gnome.Characters
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gnome.Characters{,.*},
+  dbus receive bus=session path=/org/gnome/Characters{,/**}
+       interface=org.gnome.Characters{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/Characters{,/**}
+       interface=org.gnome.Characters{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gnome/Characters{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gnome/Characters{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gnome/Characters{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.Characters{,.*}}"),
+  dbus send bus=session path=/org/gnome/Characters{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  dbus send bus=system path=/org/freedesktop/DBus
+       interface=org.freedesktop.DBus
+       member=ListNames
+       peer=(label=dbus-system),
+
+  @{exec_path} mr,
+
+  @{bin}/gjs-console rix,
+
+  @{open_path} rpx -> child-open-help,
+
+  /usr/share/org.gnome.Characters/{,**} r,
+  /usr/share/xml/iso-codes/{,**} r,
+
+  owner @{PROC}/@{pid}/mounts r,
+  owner @{PROC}/@{pid}/task/@{tid}/stat r,
+
+  include if exists <local/gnome-characters>
+}
+
+# vim:syntax=apparmor

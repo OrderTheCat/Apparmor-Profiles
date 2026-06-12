@@ -1,0 +1,48 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2026 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/gpu-screen-recorder
+@{att} = ""
+profile gpu-screen-recorder /{,usr/}bin/gpu-screen-recorder flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/graphics>
+  include <abstractions/audio-client>
+  include <abstractions/nameservice-strict>
+  include <abstractions/sys/dmi>
+
+  signal (receive) set=(int, usr2) peer=gsr-ui,
+  signal (send) set=(kill) peer=gsr-kms-server,
+
+  @{exec_path} r,
+
+  @{bin}/gsr-kms-server rpx,
+
+  owner @{HOME}/.nv/nvidia-application-profiles-rc.d/ rw,
+  owner @{HOME}/.nv/nvidia-application-profiles-rc.d/10-gsr-cuda-no-stable-perf-limit rw,
+
+  owner @{user_videos_dirs}/ r,
+  owner @{user_videos_dirs}/**.{flv,mkv,mp4,mov} w,
+  owner @{user_pictures_dirs}/ r,
+  owner @{user_pictures_dirs}/**.{jpg,png} w,
+
+  owner @{user_config_dirs}/gpu-screen-recorder/restore_token rw,
+
+  owner @{PROC}/@{pid}/task/@{tid}/comm w,
+
+  owner @{tmp}/.gsr-kms-socket-* rw,
+
+  owner @{run}/user/@{uid}/xauth_@{rand6} r,
+
+  /usr/share/gsr-ui/fonts/{,**} r,
+
+  #silencer deny /etc/machine-id r,
+
+  include if exists <local/gpu-screen-recorder>
+}
+
+# vim:syntax=apparmor

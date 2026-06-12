@@ -1,0 +1,407 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) Libvirt Team
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+# Based on Libvirt Apparmor profile, it is largelly restricted from it.
+# As upstream profile mostly focus on confining the guests. Not libvirt itself.
+# It uses a lot of profiles provided by apparmor.d
+# Source: https://gitlab.com/libvirt/libvirt/-/blob/master/src/security/apparmor/usr.sbin.libvirtd.in
+
+# Warning: Such a profile is limited as it gives access to a lot of resources.
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{sbin}/libvirtd
+@{att} = /att/libvirtd/
+profile libvirtd /{,usr/}{,s}bin/libvirtd flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-session>
+  include <abstractions/bus-system>
+  include <abstractions/bus/session/org.gtk.vfs.MountTracker>
+  include <abstractions/bus/system/org.freedesktop.login1>
+  include <abstractions/bus/system/org.freedesktop.PolicyKit1>
+  include <abstractions/attached/consoles>
+  include <abstractions/devices-usb>
+  include <abstractions/disks-write>
+  include <abstractions/mime>
+  include <abstractions/attached/nameservice-strict>
+
+  capability audit_write,
+  capability bpf,
+  capability chown,
+  capability dac_override,
+  capability dac_read_search,
+  capability fowner,
+  capability fsetid,
+  capability ipc_lock,
+  capability kill,
+  capability mknod,
+  capability net_admin,
+  capability net_raw,
+  capability perfmon,
+  capability setgid,
+  capability setpcap,
+  capability setuid,
+  capability sys_admin,
+  capability sys_chroot,
+  capability sys_module,
+  capability sys_nice,
+  capability sys_pacct,
+  capability sys_ptrace,
+  capability sys_rawio,
+  capability sys_resource,  # Needed for vfio
+
+  network inet dgram,
+  network inet stream,
+  network inet6 dgram,
+  network inet6 stream,
+  network netlink raw,
+  network packet dgram,
+  network packet raw,
+
+  mount options=(rw, make-rslave) /,
+  mount options=(rw, nosuid) -> @{run}/libvirt/qemu/*.dev/,
+
+  # Libvirt provides any mounts under /dev to qemu namespaces
+  mount options=(rw, move) /dev/ -> @{run}/libvirt/qemu/*.dev/,
+  mount options=(rw, move) /dev/** -> @{run}/libvirt/qemu/*{,/},
+  mount options=(rw, move) @{run}/libvirt/qemu/*.dev/ -> /dev/,
+  mount options=(rw, move) @{run}/libvirt/qemu/*{,/} -> /dev/**,
+
+  umount @{run}/libvirt/qemu/*.dev/,
+  umount /dev/,
+
+  mqueue getattr type=posix /,
+
+  ptrace (read,trace) peer=@{profile_name},
+  ptrace (read,trace) peer=dnsmasq,
+  ptrace (read,trace) peer=gnome-boxes,
+  ptrace (read,trace) peer=libvirt-@{uuid},
+  ptrace (read,trace) peer=libvirt-dbus,
+  ptrace (read,trace) peer=unconfined,
+  ptrace (read,trace) peer=virt-manager,
+
+  signal (read,send) peer=libvirt-@{uuid},
+  signal (read,send) peer=unconfined,
+  signal (send) peer=dnsmasq,
+  signal (send) set=(kill, term) peer=virtiofsd,
+  signal (send) set=(term) peer=libvirtd//qemu_bridge_helper,
+  signal (send) set=(term) peer=swtpm,
+
+  unix (send, receive) type=stream addr=none peer=(label=libvirt-@{uuid}),
+  unix (send, receive) type=stream addr=none peer=(label=libvirtd//qemu_bridge_helper),
+  unix (send, receive) type=stream addr=none peer=(label=unconfined addr=none),
+  unix (send, receive) type=stream addr=none peer=(label=unconfined),
+  unix (send, receive) type=stream addr=none peer=(label=virt-manager),
+
+  # Allow changing to our UUID-based named profiles
+  change_profile -> libvirt-@{uuid},
+
+  #aa/dbus talk bus=system name=org.fedoraproject.FirewallD1 label=firewalld
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=firewalld),
+  # org.fedoraproject.FirewallD1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/fedoraproject/FirewallD1{,/**}
+       interface=org.fedoraproject.FirewallD1{,.*}
+       peer=(name="{@{busname},org.fedoraproject.FirewallD1{,.*},org.freedesktop.DBus}", label=firewalld),
+  dbus send bus=system path=/org/fedoraproject/FirewallD1{,/**}
+       interface=org.fedoraproject.FirewallD1{,.*}
+       peer=(name="org.fedoraproject.FirewallD1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/fedoraproject/FirewallD1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.fedoraproject.FirewallD1{,.*},org.freedesktop.DBus}", label=firewalld),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/fedoraproject/FirewallD1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.fedoraproject.FirewallD1{,.*},org.freedesktop.DBus}", label=firewalld),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/fedoraproject/FirewallD1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.fedoraproject.FirewallD1{,.*},org.freedesktop.DBus}", label=firewalld),
+  dbus receive bus=system path=/org/fedoraproject/FirewallD1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.fedoraproject.FirewallD1{,.*},org.freedesktop.DBus}", label=firewalld),
+
+  #aa/dbus talk bus=system name=org.freedesktop.machine1 label=systemd-machined
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=systemd-machined),
+  # org.freedesktop.machine1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/machine1{,/**}
+       interface=org.freedesktop.machine1{,.*}
+       peer=(name="{@{busname},org.freedesktop.machine1{,.*},org.freedesktop.DBus}", label=systemd-machined),
+  dbus send bus=system path=/org/freedesktop/machine1{,/**}
+       interface=org.freedesktop.machine1{,.*}
+       peer=(name="org.freedesktop.machine1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/machine1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.machine1{,.*},org.freedesktop.DBus}", label=systemd-machined),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/machine1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.machine1{,.*},org.freedesktop.DBus}", label=systemd-machined),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/machine1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.machine1{,.*},org.freedesktop.DBus}", label=systemd-machined),
+  dbus receive bus=system path=/org/freedesktop/machine1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.machine1{,.*},org.freedesktop.DBus}", label=systemd-machined),
+
+
+  dbus receive bus=session
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name=@{busname}, label="{gnome-shell,gnome-extension}"),
+
+  # include <abstractions/bus/system/own>
+  dbus send bus=system path=/org/freedesktop/DBus
+       interface=org.freedesktop.DBus
+       member={ListNames,ListActivatableNames}
+       peer=(name=org.freedesktop.DBus, label="@{p_dbus_system}"),
+
+  @{exec_path} mr,
+
+  @{lib}/libvirt/libvirt_iohelper                   rix,
+  @{lib}/libvirt/libvirt_parthelper                 rix,
+
+  @{lib}/{,qemu/}qemu-bridge-helper                 rpx,
+  @{lib}/{,qemu/}vhost-user-gpu                    rpux,
+  @{lib}/{,qemu/}virtiofsd                         rux, # TODO: WIP
+  @{lib}/udev/scsi_id                              rpux,
+  @{lib}/xen-*/bin/libxl-save-helper               rpux,
+  @{lib}/xen-*/bin/pygrub                          rpux,
+  @{lib}/xen-common/bin/xen-toolstack              rpux,
+  @{lib}/xen/bin/*                                 rpux,
+
+  @{bin}/kmod                                 rcx -> kmod,
+  @{bin}/mdevctl                              rpx, #aa:lint ignore=sbin
+  @{bin}/ssh                                  rpx,
+  @{bin}/swtpm                                rpx,
+  @{bin}/swtpm_ioctl                          rpx,
+  @{bin}/swtpm_setup                          rpx,
+  @{bin}/udevadm                              rpx,
+  @{bin}/virtiofsd                            rpx, # TODO: WIP
+  @{sbin}/dmidecode                           rpx,
+  @{sbin}/dnsmasq                             rpx,
+  @{sbin}/lvm                                 rpux,
+  @{sbin}/mdevctl                             rpx,
+  @{sbin}/virtlogd                            rpx,
+
+  @{sh_path}                    rix,
+  @{bin}/ip                     rix,
+  @{sbin}/nft                   rix,
+  @{bin}/qemu-img               rux, # TODO: Integration with virt-aa-helper
+  @{bin}/qemu-system*           rux, # TODO: Integration with virt-aa-helper
+  @{sbin}/tc                    rix,
+  @{bin}/xmllint                rix,
+  @{sbin}/xtables-{nft,legacy}-multi  rix,
+  @{lib}/libvirt/virt-aa-helper rpx,
+
+  /etc/libvirt/hooks/**    rpux,
+  /etc/xen/scripts/**      rmix,
+  /var/lib/libvirt/virtd*  rix,
+
+  /usr/share/edk2*/{,**} rk,
+  /usr/share/gvfs/remote-volume-monitors/{,**} r,
+  /usr/share/hwdata/* r,
+  /usr/share/iproute2/{,**} r,
+  /usr/share/libvirt/{,**} r,
+  /usr/share/misc/pci.ids r,
+  /usr/share/OVMF/{,**} rk,
+  /usr/share/qemu/{,**} r,
+
+  @{etc_rw}/apparmor.d/libvirt/libvirt-@{uuid} r,
+  @{etc_rw}/libvirt/{,**} rw,
+  /etc/mdevctl.d/{,**} r,
+  /etc/sasl2/qemu.conf r,
+  /etc/xml/catalog r,
+
+  / r,
+
+  /var/cache/libvirt/{,**} rw,
+  /var/lib/libvirt/ rw,
+  /var/lib/libvirt/** rwk,
+  /var/log/swtpm/libvirt/{,**} rw,
+
+  # User VM images and share
+  @{user_share_dirs}/ r,
+  @{user_share_dirs}/libvirt/{,**} rwk,
+  @{user_vm_dirs}/{,**} rwk,
+  @{user_publicshare_dirs}/{,**} rwk,
+
+  owner @{user_cache_dirs}/libvirt/{,**} rwk,
+  owner @{user_config_dirs}/libvirt/{,**} rwk,
+
+  owner @{run}/user/@{uid}/libvirt/ rw,
+  owner @{run}/user/@{uid}/libvirt/** rwk,
+
+  @{att}@{run}/systemd/inhibit/@{int}.ref rw,
+
+  /dev/shm/ w,
+
+  @{run}/credentials/libvirtd.service/secrets-encryption-key r,
+  @{run}/libvirt/ rw,
+  @{run}/libvirt/** rwk,
+  @{run}/libvirtd.pid wk,
+  @{run}/lock/LCK.._pts_@{int} rw,
+  @{run}/utmp rk,
+
+  @{run}/udev/data/+*:* r,                # Identifies all subsystems
+  @{run}/udev/data/c@{int}:@{int} r,      # Identifies all character devices
+  @{run}/udev/data/n@{int} r,             # For network interfaces
+
+  @{sys}/bus/[a-z]*/devices/ r,
+  @{sys}/bus/**/uevent r,
+  @{sys}/bus/hid/drivers/*/uevent r,
+  @{sys}/bus/pci/drivers_probe w,
+  @{sys}/bus/pci/drivers/*/unbind w,
+  @{sys}/bus/usb/drivers/*/uevent r,
+  @{sys}/class/[a-z]*/ r,
+  @{sys}/devices/@{pci}/class r,
+  @{sys}/devices/@{pci}/config r,
+  @{sys}/devices/@{pci}/device r,
+  @{sys}/devices/@{pci}/driver_override w,
+  @{sys}/devices/@{pci}/mdev_supported_types/{,**} r,
+  @{sys}/devices/@{pci}/mdev_supported_types/*/create w,
+  @{sys}/devices/@{pci}/net/*/{,**} r,
+  @{sys}/devices/@{pci}/numa_node r,
+  @{sys}/devices/@{pci}/remove w,
+  @{sys}/devices/@{pci}/resource r,
+  @{sys}/devices/@{pci}/revision r,
+  @{sys}/devices/@{pci}/sriov_totalvfs r,
+  @{sys}/devices/@{pci}/subsystem_device r,
+  @{sys}/devices/@{pci}/subsystem_vendor r,
+  @{sys}/devices/@{pci}/vendor r,
+  @{sys}/devices/**/uevent r,
+
+  @{sys}/devices/@{pci}/distance r,
+  @{sys}/devices/@{pci}/meminfo r,
+  @{sys}/devices/system/cpu/cpu@{int}/cache/{,**} r,
+  @{sys}/devices/system/cpu/cpu@{int}/topology/{,**} r,
+  @{sys}/devices/system/cpu/isolated r,
+  @{sys}/devices/system/cpu/present r,
+  @{sys}/devices/system/node/ r,
+  @{sys}/devices/system/node/node@{int}/ r,
+  @{sys}/devices/system/node/node@{int}/cpumap r,
+  @{sys}/devices/system/node/node@{int}/distance r,
+  @{sys}/devices/system/node/node@{int}/hugepages/{,**} r,
+  @{sys}/devices/system/node/node@{int}/meminfo r,
+  @{sys}/devices/virtual/dmi/id/* r,
+  @{sys}/devices/virtual/net/{,**} rw,
+
+  @{sys}/kernel/debug/kvm/{,**} r,
+  @{sys}/kernel/iommu_groups/ r,
+  @{sys}/kernel/iommu_groups/@{int}/devices/ r,
+  @{sys}/kernel/mm/hugepages/{,**} r,
+  @{sys}/kernel/security/apparmor/profiles r,
+
+  @{sys}/module/*/uevent r,
+  @{sys}/module/kvm_*/parameters/* r,
+  @{sys}/module/vhost/parameters/max_mem_regions r,
+
+  @{sys}/fs/cgroup/ r,
+  @{sys}/fs/cgroup/cgroup.controllers r,
+  @{sys}/fs/cgroup/machine.slice/* r,
+  @{sys}/fs/cgroup/machine.slice/machine-qemu*.scope/{,**} rw,
+  @{sys}/fs/cgroup/net_cls/machine.slice/ rw,
+  @{sys}/fs/cgroup/net_cls/machine.slice/machine-qemu*.scope/{,**} rw,
+
+        @{PROC}/@{pid}/cmdline r,
+        @{PROC}/@{pid}/net/route r,
+        @{PROC}/@{pids}/cgroup r,
+        @{PROC}/@{pids}/net/dev r,
+        @{PROC}/@{pids}/net/ip_tables_names r,
+        @{PROC}/@{pids}/net/psched r,
+        @{PROC}/@{pids}/stat r,
+        @{PROC}/@{pids}/task/@{tid}/sched r,
+        @{PROC}/@{pids}/task/@{tid}/schedstat r,
+        @{PROC}/@{pids}/task/@{tid}/stat r,
+        @{PROC}/devices r,
+        @{PROC}/mtrr w,
+        @{PROC}/sys/net/ipv{4,6}/** rw,
+        @{PROC}/uptime r,
+  owner @{PROC}/@{pid}/fd/ r,
+  owner @{PROC}/@{pid}/mounts r,
+  owner @{PROC}/@{pid}/task/@{tid}/comm rw,
+
+  /dev/cpu/@{int}/msr r,
+  /dev/dri/ r,
+  /dev/hugepages/{,**} w,
+  /dev/kvm rw,
+  /dev/mapper/ r,
+  /dev/mapper/control rw,
+  /dev/mqueue/ w,
+  /dev/net/tun rw,
+  /dev/ptmx rw,
+  /dev/pts/ w,
+  /dev/random rw,
+  /dev/shm/libvirt/{,**} rw,
+  /dev/urandom rw,
+  /dev/userfaultfd w,
+  /dev/vfio/@{int} rwk,
+  /dev/vhost-net rw,
+
+  # Force the use of virt-aa-helper
+  audit deny @{sbin}/apparmor_parser rwxl,
+  audit deny @{etc_rw}/apparmor.d/libvirt/** wxl,
+  audit deny @{sys}/kernel/security/apparmor/features rwxl,
+  audit deny @{sys}/kernel/security/apparmor/matching rwxl,
+  audit deny @{sys}/kernel/security/apparmor/.* rwxl,
+
+  profile kmod flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/app/kmod>
+
+    capability sys_module,
+
+    @{sys}/module/compression r,
+    @{sys}/module/iommufd/initstate r,
+    @{sys}/module/irqbypass/initstate r,
+    @{sys}/module/vfio/initstate r,
+
+    include if exists <local/libvirtd_kmod>
+  }
+
+  profile qemu_bridge_helper flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+
+    capability net_admin,
+    capability setgid,
+    capability setpcap,
+    capability setuid,
+
+    network inet stream,
+
+    # For communication/control from libvirtd
+    unix (send, receive) type=stream addr=none peer=(label=libvirtd),
+    signal (receive) set=(term) peer=libvirtd,
+
+    /{usr/,}{lib,lib64,lib/qemu,libexec}/qemu-bridge-helper rmix,
+
+    /etc/qemu/{,**} r,
+
+    @{PROC}/@{pids}/status r,
+
+    /dev/net/tun rw,
+
+    include if exists <local/libvirtd_qemu_bridge_helper>
+  }
+
+  include if exists <usr/libvirtd>
+  include if exists <local/libvirtd>
+}
+
+# vim:syntax=apparmor

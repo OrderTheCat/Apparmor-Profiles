@@ -1,0 +1,30 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/nslookup
+@{att} = ""
+profile nslookup /{,usr/}bin/nslookup flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/consoles>
+  include <abstractions/nameservice-strict>
+
+  network inet dgram,
+  network inet6 dgram,
+  network inet stream,
+  network inet6 stream,
+
+  @{exec_path} mr,
+
+  owner @{PROC}/@{pids}/task/@{tid}/comm rw,
+
+  @{PROC}/version_signature r,
+
+  include if exists <local/nslookup>
+}
+
+# vim:syntax=apparmor

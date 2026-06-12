@@ -1,0 +1,52 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/spice-vdagent
+@{att} = /att/spice-vdagent/
+profile spice-vdagent /{,usr/}bin/spice-vdagent flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/audio-server>
+  include <abstractions/bus/session/org.gnome.Mutter.DisplayConfig>
+  include <abstractions/bus/session/org.gtk.vfs.Daemon>
+  include <abstractions/bus/system/org.freedesktop.RealtimeKit1>
+  include <abstractions/attached/consoles>
+  include <abstractions/dconf-write>
+  include <abstractions/desktop>
+  include <abstractions/fontconfig-cache-write>
+  include <abstractions/graphics>
+  include <abstractions/gstreamer>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/sys/dmi>
+  include <abstractions/user-dirs>
+
+  dbus send bus=session path=/org/freedesktop/portal/desktop
+       interface=org.freedesktop.portal.Realtime
+       member=MakeThreadRealtimeWithPID
+       peer=(name=org.freedesktop.portal.Desktop, label=xdg-desktop-portal),
+
+  dbus receive bus=session path=/
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name=@{busname}, label=gnome-shell),
+
+  @{exec_path} mr,
+
+  /etc/fstab r,
+
+  @{run}/mount/utab r,
+  @{run}/spice-vdagentd/spice-vdagent-sock rw,
+
+  owner @{PROC}/@{pid}/mountinfo r,
+  owner @{PROC}/@{pids}/task/@{tid}/comm rw,
+
+  /dev/udmabuf rw,
+
+  include if exists <local/spice-vdagent>
+}
+
+# vim:syntax=apparmor

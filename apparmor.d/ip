@@ -1,0 +1,71 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2019-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/ip
+@{att} = /att/ip/
+profile ip /{,usr/}bin/ip flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+  include <abstractions/attached/nameservice-strict>
+
+  capability bpf,
+  capability net_admin,
+  capability sys_admin,
+  capability sys_module,
+  capability sys_ptrace,
+
+  network netlink raw,
+
+  mount fstype=sysfs                                -> @{sys},
+  mount options=(rw bind)                         / -> @{run}/netns/*,
+  mount options=(rw rbind)            @{run}/netns/ -> @{run}/netns/,
+  mount options=(rw, bind)                  @{att}/ ->  @{run}/netns/*,
+  mount options=(rw, bind) /etc/netns/*/resolv.conf -> /etc/resolv.conf,
+  mount options=(rw, rshared)                       -> @{run}/netns/,
+  mount options=(rw, make-rslave)                      /,
+
+  umount @{run}/netns/*,
+  umount @{sys},
+
+  ptrace read,
+
+  @{exec_path} mrix,
+
+  # To run command with 'ip netns exec'
+  @{shells_path}       rux,
+  @{bin}/sudo          rpx,
+  @{bin}/taskset       rpux,
+
+  @{bin}/firewall-cmd  rpx,
+  @{sbin}/firewalld    rpx,
+  @{sbin}/nft          rpx,
+
+  @{att}/ r,
+
+  /etc/iproute2/{,**} r,
+  /etc/netns/*/ r,
+
+  /usr/share/iproute2/{,**} r,
+
+        @{run}/netns/ r,
+        @{run}/netns/* rw,
+  owner @{run}/netns/ rwk,
+
+        @{PROC}/ r,
+  owner @{PROC}/@{pid}/cgroup r,
+  owner @{PROC}/@{pid}/net/dev_mcast r,
+  owner @{PROC}/@{pid}/net/igmp{,6} r,
+  owner @{PROC}/sys/net/ipv{4,6}/route/flush w,
+
+  /dev/net/tun rw,
+
+  include if exists <local/ip>
+}
+
+# vim:syntax=apparmor

@@ -1,0 +1,74 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+# System Paths
+# ------------
+
+# @{MOUNTDIRS} is a space-separated list of where user mount directories
+# are stored, for programs that must enumerate all mount directories on a
+# system.
+@{MOUNTDIRS}=/media/ @{run}/media/@{user}/ /mnt/
+
+# @{MOUNTS} is a space-separated list of all user mounted directories.
+@{MOUNTS}=@{MOUNTDIRS}/*/ @{run}/user/@{uid}/gvfs/
+
+# Common places for binaries and libraries across distributions
+@{bin}=/{,usr/}bin
+
+@{sbin}=/{,usr/}{,s}bin
+@{lib}=/{,usr/}lib{,exec,32,64}
+
+# Common places for temporary files
+# /tmp/user/@{uid}/ is needed when using .... (default on Debian)
+@{tmp}=/tmp/ /tmp/user/@{uid}/
+
+# Common places for EFI
+@{efi}=/boot/ /efi/ /boot/efi/
+
+# System Variables
+# ----------------
+
+# Common architecture names
+@{arch}=x86{_,-}64 x64 amd64 i386 i686
+
+# Dbus unique name
+@{busname}=:1.@{u16} :not.active.yet
+
+# Unix dbus address prefix
+@{udbus}=@{h}{@{h},}{@{h},}{@{h},}{@{h},}{@{h},}{@{h},}{@{h},}{@{h},}{@{h},}{@{h},}{@{h},}{@{h},}{@{h},}{@{h},}{@{h},}
+
+# dbus-broker special addresses
+@{udbus}+=@{int12}@{int}
+
+# Universally unique identifier
+@{uuid}=@{hex8}[-_]@{hex4}[-_]@{hex4}[-_]@{hex4}[-_]@{hex12}
+
+# Username & group valid characters
+@{user}=[a-zA-Z_]{@{w},}{@{w},}{@{w},}{@{w},}{@{w},}{@{w},}{@{w},}{@{w},}{@{w},}{@{w},}{@{w},}{@{w},}{@{w},}{@{w},}{@{w},}{@{w},}{@{w},}{@{w},}{@{w},}{@{w},}{@{w},}{@{w},}{@{w},}{@{w},}{@{w},}{@{w},}{@{w},}{@{w},}{@{w},}{@{w},}{@{w},}
+@{group}=@{user}
+
+# Semantic version
+@{version}=@{u16}{.@{u16},}{.@{u16},}{{-,_}@{rand},}
+
+
+# System Internal
+# ---------------
+
+
+
+# Shortcut for PCI device
+@{pci_id}=@{hex4}:@{hex2}:@{hex2}.@{h}
+@{pci}=@{pci_bus}/**/
+
+# Udev data dynamic assignment ranges
+# See https://raw.githubusercontent.com/torvalds/linux/master/Documentation/admin-guide/devices.txt
+@{dynamic}=23[4-9] 24[0-9] 25[0-4]                       # range 234 to 254
+@{dynamic}+=38[4-9] 39[0-9] 4[0-9][0-9] 50[0-9] 51[0-1]  # range 384 to 511
+
+# Default attachment path when re-attached path disconnected path is ignored.
+# Disabled on abi3 and Ubuntu 25.04+
+# See https://apparmor.pujol.io/development/internal/#re-attached-path
+# @{att}=""
+
+# vim:syntax=apparmor

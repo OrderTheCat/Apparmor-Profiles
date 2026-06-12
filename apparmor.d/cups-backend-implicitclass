@@ -1,0 +1,43 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/cups/backend/implicitclass
+@{att} = ""
+profile cups-backend-implicitclass /{,usr/}lib{,exec,32,64}/cups/backend/implicitclass flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/avahi-observe>
+  include <abstractions/cups-client>
+  include <abstractions/nameservice-strict>
+
+  network inet dgram,
+  network inet6 dgram,
+  network inet stream,
+  network inet6 stream,
+
+  # TODO:
+  # network (receive,send,setopt) inet dgram peer=(port=53),
+  # network (receive,send,setopt) inet stream peer=(port=631),
+
+  signal receive set=term peer=cupsd,
+  signal send set=term peer=cups-backend-ipp,
+
+  unix type=stream peer=(label=cups-backend-ipp),
+  unix type=stream peer=(label=cupsd),
+
+  @{exec_path} mr,
+
+  @{bin}/ippfind px,
+  @{lib}/cups/backend/ipp px,
+
+  /etc/papersize r,
+  /etc/paperspecs r,
+
+  include if exists <local/cups-backend-implicitclass>
+}
+
+# vim:syntax=apparmor

@@ -1,0 +1,66 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2019-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/repo
+@{att} = ""
+profile repo /{,usr/}bin/repo flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/python>
+  include <abstractions/nameservice-strict>
+  include <abstractions/ssl_certs>
+
+  network inet dgram,
+  network inet6 dgram,
+  network inet stream,
+  network inet6 stream,
+  network netlink raw,
+
+  @{exec_path} r,
+
+  @{sh_path}               rix,
+  @{bin}/                  r,
+  @{bin}/curl              rix,
+  @{bin}/env               rix,
+  @{bin}/git               rix,
+  @{python_path}           rix,
+  @{bin}/uname             rix,
+  @{lib}/git{,-core}/git*  rix,
+
+  @{bin}/gpg{,2}           rpx,
+  @{bin}/ssh               rpx,
+
+  /usr/share/git-core/{,**} r,
+
+  # Android source dir
+  owner @{user_projects_dirs}/** rwkl -> @{user_projects_dirs}/**,
+  owner @{user_projects_dirs}/**/.repo/repo/main.py rix,
+
+  owner @{HOME}/.gitconfig rw,
+  owner @{HOME}/.gitconfig.lock rwk,
+  owner @{HOME}/.repo_.gitconfig.json rw,
+  owner @{HOME}/.repoconfig/{,**} rw,
+
+  owner @{user_config_dirs}/git/config rw,
+
+  owner @{tmp}/.git_vtag_tmp@{rand6} rw,
+  owner @{tmp}/ssh-*/ rw,
+
+  owner /dev/shm/* rw,
+  owner /dev/shm/sem.mp-@{word8} rwl -> /dev/shm/*,
+
+  owner @{PROC}/@{pid}/fd/ r,
+  owner @{PROC}/@{pid}/mounts r,
+
+  # Silencer
+  deny /etc/.repo_gitconfig.json w,
+
+  include if exists <local/repo>
+}
+
+# vim:syntax=apparmor

@@ -1,0 +1,64 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2022 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/firewall-applet
+@{att} = /att/firewall-applet/
+profile firewall-applet /{,usr/}bin/firewall-applet flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+  include <abstractions/dconf-write>
+  include <abstractions/desktop>
+  include <abstractions/network-manager-observe>
+  include <abstractions/python>
+
+  #aa/dbus talk bus=system name=org.fedoraproject.FirewallD1 label=firewalld
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=firewalld),
+  # org.fedoraproject.FirewallD1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/fedoraproject/FirewallD1{,/**}
+       interface=org.fedoraproject.FirewallD1{,.*}
+       peer=(name="{@{busname},org.fedoraproject.FirewallD1{,.*},org.freedesktop.DBus}", label=firewalld),
+  dbus send bus=system path=/org/fedoraproject/FirewallD1{,/**}
+       interface=org.fedoraproject.FirewallD1{,.*}
+       peer=(name="org.fedoraproject.FirewallD1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/fedoraproject/FirewallD1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.fedoraproject.FirewallD1{,.*},org.freedesktop.DBus}", label=firewalld),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/fedoraproject/FirewallD1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.fedoraproject.FirewallD1{,.*},org.freedesktop.DBus}", label=firewalld),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/fedoraproject/FirewallD1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.fedoraproject.FirewallD1{,.*},org.freedesktop.DBus}", label=firewalld),
+  dbus receive bus=system path=/org/fedoraproject/FirewallD1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.fedoraproject.FirewallD1{,.*},org.freedesktop.DBus}", label=firewalld),
+
+
+  @{exec_path} mr,
+
+  @{bin}/ r,
+  @{python_path} r,
+
+  owner @{PROC}/@{pid}/cmdline r,
+  owner @{PROC}/@{pid}/mounts r,
+  owner @{PROC}/@{pid}/cgroup r,
+
+  owner @{user_config_dirs}/firewall/applet.conf rwkl,
+
+  include if exists <local/firewall-applet>
+}
+
+# vim:syntax=apparmor

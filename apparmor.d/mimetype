@@ -1,0 +1,25 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2020-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/mimetype @{bin}/*_perl/mimetype
+@{att} = ""
+profile mimetype /{{,usr/}bin/mimetype,{,usr/}bin/*_perl/mimetype} flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/mime>
+  include <abstractions/perl>
+
+  @{exec_path} r,
+
+  # To read files
+  owner /** r,  #aa:lint ignore=too-wide
+
+  include if exists <local/mimetype>
+}
+
+# vim:syntax=apparmor

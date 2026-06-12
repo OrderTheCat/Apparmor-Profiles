@@ -1,0 +1,58 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/oomctl
+@{att} = ""
+profile oomctl /{,usr/}bin/oomctl flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/bus-system>
+  include <abstractions/common/systemd>
+
+  signal send set=cont peer=child-pager,
+
+  #aa/dbus talk bus=system name=org.freedesktop.oom1 label="@{p_systemd_oomd}"
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label="@{p_systemd_oomd}"),
+  # org.freedesktop.oom1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/oom1{,/**}
+       interface=org.freedesktop.oom1{,.*}
+       peer=(name="{@{busname},org.freedesktop.oom1{,.*},org.freedesktop.DBus}", label="@{p_systemd_oomd}"),
+  dbus send bus=system path=/org/freedesktop/oom1{,/**}
+       interface=org.freedesktop.oom1{,.*}
+       peer=(name="org.freedesktop.oom1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/oom1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.oom1{,.*},org.freedesktop.DBus}", label="@{p_systemd_oomd}"),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/oom1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.oom1{,.*},org.freedesktop.DBus}", label="@{p_systemd_oomd}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/oom1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.oom1{,.*},org.freedesktop.DBus}", label="@{p_systemd_oomd}"),
+  dbus receive bus=system path=/org/freedesktop/oom1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.oom1{,.*},org.freedesktop.DBus}", label="@{p_systemd_oomd}"),
+
+
+  @{exec_path} mr,
+
+  @{pager_path} rpx -> child-pager,
+
+  owner @{PROC}/@{pid}/cgroup r,
+
+  include if exists <local/oomctl>
+}
+
+# vim:syntax=apparmor

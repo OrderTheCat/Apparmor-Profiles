@@ -1,0 +1,49 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+# Allow access to xdg-desktop-portal and xdg-document-portal
+#
+# !!! warning "TODO"
+#
+#     This should be restricted by a lot, however, the risk of breaking things is
+#     is also really important. Thus, for now we globally allow full talk access
+#     over the org.freedesktop.portal.* name to xdg-desktop-portal
+#
+
+  abi <abi/4.0>,
+
+  #aa/dbus talk bus=session name=org.freedesktop.portal.* label=xdg-desktop-portal
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=xdg-desktop-portal),
+  # org.freedesktop.portal.*: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/freedesktop/portal/*{,/**}
+       interface=org.freedesktop.portal.*{,.*}
+       peer=(name="{@{busname},org.freedesktop.portal.*{,.*},org.freedesktop.DBus}", label=xdg-desktop-portal),
+  dbus send bus=session path=/org/freedesktop/portal/*{,/**}
+       interface=org.freedesktop.portal.*{,.*}
+       peer=(name="org.freedesktop.portal.*{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/freedesktop/portal/*{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.portal.*{,.*},org.freedesktop.DBus}", label=xdg-desktop-portal),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/freedesktop/portal/*{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.portal.*{,.*},org.freedesktop.DBus}", label=xdg-desktop-portal),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/freedesktop/portal/*{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.portal.*{,.*},org.freedesktop.DBus}", label=xdg-desktop-portal),
+  dbus receive bus=session path=/org/freedesktop/portal/*{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.portal.*{,.*},org.freedesktop.DBus}", label=xdg-desktop-portal),
+
+
+  include if exists <abstractions/bus/session/org.freedesktop.portal.d>
+
+# vim:syntax=apparmor

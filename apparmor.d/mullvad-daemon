@@ -1,0 +1,147 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/mullvad-daemon
+@{exec_path} += /opt/Mullvad*/resources/mullvad-daemon
+@{att} = /att/mullvad-daemon/
+profile mullvad-daemon /{{,usr/}bin/mullvad-daemon,opt/Mullvad*/resources/mullvad-daemon,opt/Mullvad*/resources/mullvad-daemon} flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-system>
+  include <abstractions/attached/nameservice-strict>
+
+  capability dac_override,
+  capability fowner,
+  capability fsetid,
+  capability net_admin,
+  capability net_raw,
+  capability sys_admin,
+
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+  network inet raw,
+  network inet6 raw,
+  network netlink raw,
+  network netlink dgram,
+
+  mount fstype=cgroup -> @{sys}/fs/cgroup/net_cls/,
+
+  #aa/dbus talk bus=system name=org.freedesktop.NetworkManager label=NetworkManager
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=NetworkManager),
+  # org.freedesktop.NetworkManager: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/NetworkManager{,/**}
+       interface=org.freedesktop.NetworkManager{,.*}
+       peer=(name="{@{busname},org.freedesktop.NetworkManager{,.*},org.freedesktop.DBus}", label=NetworkManager),
+  dbus send bus=system path=/org/freedesktop/NetworkManager{,/**}
+       interface=org.freedesktop.NetworkManager{,.*}
+       peer=(name="org.freedesktop.NetworkManager{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/NetworkManager{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.NetworkManager{,.*},org.freedesktop.DBus}", label=NetworkManager),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/NetworkManager{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.NetworkManager{,.*},org.freedesktop.DBus}", label=NetworkManager),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/NetworkManager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.NetworkManager{,.*},org.freedesktop.DBus}", label=NetworkManager),
+  dbus receive bus=system path=/org/freedesktop/NetworkManager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.NetworkManager{,.*},org.freedesktop.DBus}", label=NetworkManager),
+
+  #aa/dbus talk bus=system name=org.freedesktop.resolve1 label=systemd-resolved
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=systemd-resolved),
+  # org.freedesktop.resolve1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/resolve1{,/**}
+       interface=org.freedesktop.resolve1{,.*}
+       peer=(name="{@{busname},org.freedesktop.resolve1{,.*},org.freedesktop.DBus}", label=systemd-resolved),
+  dbus send bus=system path=/org/freedesktop/resolve1{,/**}
+       interface=org.freedesktop.resolve1{,.*}
+       peer=(name="org.freedesktop.resolve1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/resolve1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.resolve1{,.*},org.freedesktop.DBus}", label=systemd-resolved),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/resolve1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.resolve1{,.*},org.freedesktop.DBus}", label=systemd-resolved),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/resolve1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.resolve1{,.*},org.freedesktop.DBus}", label=systemd-resolved),
+  dbus receive bus=system path=/org/freedesktop/resolve1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.resolve1{,.*},org.freedesktop.DBus}", label=systemd-resolved),
+
+
+  dbus send bus=system path=/org/freedesktop/systemd1
+       interface=org.freedesktop.DBus.Properties
+       member=Get
+       peer=(name=org.freedesktop.systemd1, label="@{p_systemd}"),
+
+  @{exec_path} mr,
+
+  @{bin}/ip  rix,
+
+  "/opt/Mullvad VPN/resources/openvpn" rix,
+  "/opt/Mullvad VPN/resources/*.so*" mr,
+  "/opt/Mullvad VPN/resources/*" r,
+
+  /etc/mullvad-vpn/ rw,
+  /etc/mullvad-vpn/* r,
+  /etc/mullvad-vpn/@{uuid} rw,
+  /etc/mullvad-vpn/*.json rw,
+  @{etc_rw}/resolv.conf rw,
+  @{etc_rw}/resolv.conf.mullvadbackup rw,
+
+  owner /var/cache/mullvad-vpn/{,*} rw,
+  owner /var/log/mullvad-vpn/{,*} rw,
+  owner /var/log/private/mullvad-vpn/*.log rw,
+
+  owner @{tmp}/@{uuid} rw,
+  owner @{tmp}/talpid-openvpn-@{uuid} rw,
+
+        @{run}/NetworkManager/resolv.conf r,
+  owner @{run}/mullvad-vpn rw,
+
+  @{sys}/fs/cgroup/net_cls/ w,
+  @{sys}/fs/cgroup/net_cls/cgroup.procs rw,
+  @{sys}/fs/cgroup/net_cls/mullvad-exclusions/ w,
+  @{sys}/fs/cgroup/net_cls/mullvad-exclusions/cgroup.procs rw,
+  @{sys}/fs/cgroup/net_cls/mullvad-exclusions/net_cls.classid rw,
+  @{sys}/fs/cgroup/system.slice/cpu.max r,
+  @{sys}/fs/cgroup/system.slice/mullvad-daemon.service/cpu.max r,
+  @{sys}/fs/cgroup/system.slice/mullvad-early-boot-blocking.service/cpu.max r,
+
+        @{PROC}/@{pid}/cgroup r,
+        @{PROC}/@{pid}/mountinfo r,
+        @{PROC}/sys/net/ipv{4,6}/conf/all/arp_ignore rw,
+        @{PROC}/sys/net/ipv{4,6}/conf/all/src_valid_mark rw,
+  owner @{PROC}/@{pid}/mounts r,
+  owner @{PROC}/sys/net/ipv6/conf/all/disable_ipv6 r,
+
+  /dev/net/tun rw,
+
+  include if exists <local/mullvad-daemon>
+}
+
+# vim:syntax=apparmor

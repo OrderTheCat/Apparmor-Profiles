@@ -1,0 +1,26 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/{,@{multiarch}/}utempter/utempter
+@{att} = /att/utempter/
+profile utempter /{,usr/}lib{,exec,32,64}/{,*-linux-gnu*/}utempter/utempter flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/wutmp>
+
+  @{exec_path} mr,
+
+  /usr/share/sounds/{,**} r,
+
+  /dev/ptmx rw,
+
+  include if exists <local/utempter>
+}
+
+# vim:syntax=apparmor

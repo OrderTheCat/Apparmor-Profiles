@@ -1,0 +1,40 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Stoppedpuma <58333920+Stoppedpuma@users.noreply.github.com>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{name} = {C,c}ider sh.cider.genten
+@{domain} = sh.cider.genten org.chromium.Chromium
+@{lib_dirs} = @{lib}/cider
+@{cache_dirs} = @{user_cache_dirs}/@{name}
+@{config_dirs} = @{user_config_dirs}/@{name}
+
+@{exec_path} = @{bin}/{C,c}ider @{lib_dirs}/Cider
+@{att} = /att/cider/
+profile cider /{{,usr/}bin/{C,c}ider,{,usr/}lib{,exec,32,64}/cider/Cider} flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/audio>
+  include <abstractions/common/electron>
+  include <abstractions/fontconfig-cache-read>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/ssl_certs>
+
+  network inet dgram,
+  network inet6 dgram,
+  network inet stream,
+  network inet6 stream,
+  network netlink raw,
+
+  @{exec_path} mrix,
+
+  @{lib_dirs}/chrome-sandbox rpx,
+
+  owner @{user_config_dirs}/sh.cider.genten/WidevineCdm/*/_platform_specific/linux_@{arch}/libwidevinecdm.so mr,
+
+  include if exists <local/cider>
+}
+
+# vim:syntax=apparmor

@@ -1,0 +1,34 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/swtpm_setup
+@{att} = ""
+profile swtpm_setup /{,usr/}bin/swtpm_setup flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/nameservice-strict>
+
+  unix (send receive) type=stream peer=(label=swtpm),
+
+  @{exec_path} mr,
+
+  @{bin}/swtpm          rpx,
+  @{bin}/swtpm_localca  rpx,
+
+  /etc/swtpm_setup.conf r,
+
+  /var/log/swtpm/{,**} w,
+  /var/lib/libvirt/swtpm/@{uuid}/tpm2/ r,
+
+  owner @{tmp}/.swtpm_setup.pidfile.@{rand6} rw,
+  owner @{tmp}/swtpm_setup.certs.@{rand6}/ w,
+  owner @{tmp}/swtpm_setup.certs.@{rand6}/*.cert rw,
+
+  include if exists <local/swtpm_setup>
+}
+
+# vim:syntax=apparmor

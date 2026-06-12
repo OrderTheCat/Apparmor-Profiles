@@ -1,0 +1,48 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2019-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+  abi <abi/4.0>,
+
+  include <abstractions/gstreamer-registry>
+  include <abstractions/sys/dmi>
+
+  unix (bind listen) type=seqpacket addr=@@{hex},
+  unix (bind listen) type=seqpacket addr=@@{hex}@{hex},
+
+  @{gstreamer_path} rix,
+
+  @{lib}/@{multiarch}/libproxy/*/modules/*.so mr,
+  @{lib}/@{multiarch}/libvisual-@{version}/*/*.so mr,
+  @{lib}/frei0r-@{int}/*.so mr,
+
+  owner @{lib}/gstreamer-1.0/python/__pycache__/ w,
+  owner @{lib}/gstreamer-1.0/python/__pycache__/**.pyc.@{u64} w,
+
+  /usr/share/gstreamer-1.0/presets/Gst*Enc.prs r,
+  /usr/share/ladspa/rdf/{,**} r,
+  /usr/share/xml/iso-codes/*.xml r,
+
+  /etc/openni2/OpenNI.ini r,
+
+  /var/tmp/ r,
+  /tmp/ r,
+
+  @{run}/udev/data/+drm:card@{int}-* r,   # For screen outputs
+  @{run}/udev/data/c81:@{int}  r,         # For video4linux
+  @{run}/udev/data/c@{dynamic}:@{int} r,  # For dynamic assignment range 234 to 254, 384 to 511
+
+  @{sys}/bus/ r,
+  @{sys}/bus/media/devices/ r,
+
+  @{sys}/class/video4linux/ r,
+  @{sys}/devices/**/video4linux/video@{int}/ r,
+  @{sys}/devices/**/video4linux/video@{int}/uevent r,
+
+  /dev/ r,
+  /dev/char/@{dynamic}:@{int} w,          # For dynamic assignment range 234 to 254, 384 to 511
+
+  include if exists <abstractions/gstreamer.d>
+
+# vim:syntax=apparmor

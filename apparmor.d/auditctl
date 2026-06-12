@@ -1,0 +1,29 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{sbin}/auditctl
+@{att} = /att/auditctl/
+profile auditctl /{,usr/}{,s}bin/auditctl flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+
+  capability audit_control,
+
+  network netlink raw,
+
+  @{exec_path} mr,
+
+  /etc/audit/audit.rules r,
+  /etc/audit/auditd.conf r,
+
+  /var/log/audit/{,**} r,
+
+  include if exists <local/auditctl>
+}
+
+# vim:syntax=apparmor

@@ -1,0 +1,39 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2018-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/xdg-desktop-menu
+@{att} = ""
+profile xdg-desktop-menu /{,usr/}bin/xdg-desktop-menu flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/common/xdg>
+  include <abstractions/nameservice-strict>
+
+  @{exec_path} r,
+
+  @{sh_path}       rix,
+  @{bin}/chmod     rix,
+  @{bin}/id        rpx,
+
+  @{bin}/dbus-send                cx -> bus,
+  @{bin}/update-desktop-database  px,
+  @{bin}/xprop                    px,
+
+  profile bus flags=(complain) {
+    include <abstractions/base-strict>
+    include <abstractions/app/bus>
+    include <abstractions/bus-session>
+    include <abstractions/consoles>
+
+    include if exists <local/xdg-desktop-menu_bus>
+  }
+
+  include if exists <local/xdg-desktop-menu>
+}
+
+# vim:syntax=apparmor

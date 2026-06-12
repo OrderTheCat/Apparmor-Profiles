@@ -1,0 +1,87 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/flatpak-portal
+@{att} = /att/flatpak-portal/
+profile flatpak-portal /{,usr/}lib{,exec,32,64}/flatpak-portal flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-session>
+  include <abstractions/bus-system>
+  include <abstractions/bus/session/org.freedesktop.impl.portal.PermissionStore>
+  include <abstractions/mime>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/network-manager-observe>
+
+  capability sys_ptrace,
+
+  network netlink raw,
+
+  unix (send receive) type=seqpacket peer=(label=fapp),
+  unix (send receive) type=seqpacket peer=(label=fbwrap),
+
+  ptrace read,
+
+  signal send,
+
+  #aa/dbus own bus=session name=org.freedesktop.portal.Flatpak
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.freedesktop.portal.Flatpak{,.*},
+  dbus receive bus=session path=/org/freedesktop/portal/Flatpak{,/**}
+       interface=org.freedesktop.portal.Flatpak{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/freedesktop/portal/Flatpak{,/**}
+       interface=org.freedesktop.portal.Flatpak{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/freedesktop/portal/Flatpak{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/freedesktop/portal/Flatpak{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/freedesktop/portal/Flatpak{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.portal.Flatpak{,.*}}"),
+  dbus send bus=session path=/org/freedesktop/portal/Flatpak{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  dbus receive bus=session
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name=@{busname}, label="{gnome-shell,gnome-extension}"),
+
+  @{exec_path} mr,
+
+  @{bin}/flatpak rpx,
+
+  /usr/share/xdg-desktop-portal/portals/{,*.portal} r,
+
+        / r,
+  owner /att/**/ r,
+  owner @{att}/.flatpak-info r,
+
+  owner @{att}@{HOME}/.var/app/*/.local/share/*/logs/* rw,
+  owner @{att}@{HOME}/.var/app/*/.local/share/*/**/usr/.ref rw,
+
+  owner @{user_config_dirs}/user-dirs.dirs r,
+
+  owner @{run}/user/@{uid}/.flatpak/@{int}/* r,
+  owner @{run}/user/@{uid}/.flatpak/@{int}-private/* r,
+
+  include if exists <local/flatpak-portal>
+}
+
+# vim:syntax=apparmor

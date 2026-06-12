@@ -1,0 +1,35 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/cockpit/cockpit-wsinstance-factory
+@{att} = ""
+profile cockpit-wsinstance-factory /{,usr/}lib{,exec,32,64}/cockpit/cockpit-wsinstance-factory flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/bus-system>
+
+  capability net_admin,
+
+  unix bind type=stream addr=@@{udbus}/bus/cockpit-wsinsta/system,
+
+  dbus receive bus=system path=/org/freedesktop/systemd1
+       interface=org.freedesktop.systemd1.Manager
+       member=JobRemoved
+       peer=(name=@{busname}, label="@{p_systemd}"),
+  dbus send bus=system path=/org/freedesktop/systemd1
+       interface=org.freedesktop.systemd1.Manager
+       member=StartUnit
+       peer=(name=org.freedesktop.systemd1, label="@{p_systemd}"),
+
+  @{exec_path} mr,
+
+  @{run}/cockpit/wsinstance/https-factory.sock w,
+
+  include if exists <local/cockpit-wsinstance-factory>
+}
+
+# vim:syntax=apparmor

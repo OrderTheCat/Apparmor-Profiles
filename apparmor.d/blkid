@@ -1,0 +1,59 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2019-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{sbin}/blkid
+@{att} = /att/blkid/
+profile blkid /{,usr/}{,s}bin/blkid flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+  include <abstractions/disks-read>
+
+  capability sys_rawio,
+
+  @{exec_path} mr,
+
+  /etc/blkid.conf r,
+
+  # When the system doesn't have the /run/ dir, the cache file is placed under /etc/
+  @{etc_rw}/blkid.tab{,-@{rand6}} rw,
+  @{etc_rw}/blkid.tab.old rwl -> /etc/blkid.tab,
+
+  /.ismount-test-file rw,
+
+  # Image files
+  @{user_img_dirs}/{,**} r,
+
+  /var/tmp/mkinitramfs_@{rand6}/cryptroot/crypttab w, # file_inherit
+
+  # The standard location of the cache file
+  # Without owner here if this tool should be used as a regular user
+  @{run}/blkid/ rw,
+  @{run}/blkid/blkid.tab{,-@{rand6}} rw,
+  @{run}/blkid/blkid.tab.old rwl -> @{run}/blkid/blkid.tab,
+
+  @{PROC}/@{pid}/mounts r,
+  @{PROC}/partitions r,
+  @{PROC}/swaps r,
+
+  # Other possible location of the cache file
+  /dev/.blkid.tab.old rwl -> /dev/.blkid.tab,
+  /dev/.blkid.tab{,-@{rand6}} rw,
+  /dev/blkid.tab.old rwl -> /dev/blkid.tab,
+
+  /tmp/tmp.@{rand10}/mkinitramfs_*/cryptroot/crypttab w,
+
+  owner /dev/tty@{u8} rw,
+
+  # file_inherit
+  deny @{run}/cloud-init/ds-identify.log w,
+
+  include if exists <local/blkid>
+}
+
+# vim:syntax=apparmor

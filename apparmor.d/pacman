@@ -1,0 +1,271 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/pacman
+@{att} = /att/pacman/
+profile pacman /{,usr/}bin/pacman flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+  include <abstractions/disks-read>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/ssl_certs>
+
+  capability audit_write,
+  capability chown,
+  capability dac_override,
+  capability dac_read_search,
+  capability fowner,
+  capability fsetid,
+  capability kill,
+  capability mknod,
+  capability net_admin,
+  capability setfcap,
+  capability setgid,
+  capability setuid,
+  capability sys_admin,
+  capability sys_chroot,
+  capability sys_ptrace,
+  capability sys_resource,
+
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+  network netlink raw,
+  network unix stream,
+
+  ptrace read,
+
+  signal send,
+  signal receive set=(term winch) peer=makepkg//sudo,
+
+  @{exec_path} mrix,
+
+  # Pacman's keyring
+  @{bin}/gpg{,2}                                  cx -> gpg,
+  @{bin}/gpgconf                                  cx -> gpg,
+  @{bin}/gpgsm                                    cx -> gpg,
+
+  # Common program found in hooks & install scripts
+  @{sh_path}                                     rix,
+  @{coreutils_path}                              rix,
+  @{bin}/dot                                      ix,
+  @{bin}/filecap                                  ix,
+  @{bin}/getent                                   ix,
+  @{bin}/gettext                                  ix,
+  @{bin}/gzip                                     ix,
+  @{bin}/rsync                                    ix,
+  @{bin}/setfacl                                  ix,
+  @{bin}/tput                                     ix,
+  @{bin}/vercmp                                   ix,
+  @{bin}/which{,.debianutils}                     ix,
+  @{bin}/xmlcatalog                               ix,
+  @{sbin}/iconvconfig                             ix,
+  @{sbin}/iscsi-iname                             ix,
+  @{sbin}/setcap                                  ix,
+
+  @{bin}/dbus-send                                cx -> bus,
+  @{bin}/gdbus                                    cx -> bus,
+  @{bin}/killall                                  cx -> pkill,
+  @{bin}/kmod                                     cx -> kmod,
+  @{bin}/pkill                                    cx -> pkill,
+  @{bin}/systemctl                                cx -> systemctl,
+  @{sbin}/ldconfig                                cx -> ldconfig,
+
+  #aa:lint ignore=too-wide
+  # Hooks & install scripts can legitimately start/restart anything
+  # PU is only used as a safety fallback.
+  @{bin}/**                                       pux,
+  @{sbin}/**                                      pux,
+  /opt/*/**                                       pux,
+  /etc/**                                         pux,
+  /usr/share/**                                   pux,
+
+  priority=-1 @{lib}/**                          pux,
+  @{lib}/ghc-@{version}/bin/ghc-pkg-@{version}    px,
+  @{lib}/systemd/systemd-*                        px,
+  @{lib}/vlc/vlc-cache-gen                        px,
+
+  # For shell pwd, keept as it can annoy users to see error in pacman output
+  /**/ r,
+
+  # Install/update packages
+  #aa:lint ignore=too-wide
+  / r,
+  /*{,/} rw,
+  @{efi}/** rwlk,
+  /etc/** rwlk,
+  /opt/** rwlk,
+  /srv/** rwlk,
+  /usr/** rwlk,
+  /var/** rwlk,
+
+  # Read packages files
+  @{user_pkg_dirs}/{,**} r,
+
+  owner /var/lib/pacman/{,**} rwl,
+  owner @{tmp}/alpm_@{rand6}/{,**} rw,
+  owner @{tmp}/arch-update-@{uid}/checkupdates-@{rand}/sync/** w,
+  owner @{tmp}/checkup-db-@{int}/db.lck rw,
+  owner @{tmp}/checkup-db-@{int}/sync/{,*.db*} rw,
+  owner @{tmp}/checkup-db-@{uid}/sync/download-@{rand6}/ rw,
+  owner @{tmp}/checkup-db-@{uid}/sync/download-@{rand6}/{,*} rw,
+
+  @{run}/utmp rk,
+
+  @{sys}/{,**} r,
+
+        @{PROC}/@{pids}/ r,
+        @{PROC}/@{pids}/cgroup r,
+        @{PROC}/@{pids}/cmdline r,
+        @{PROC}/@{pids}/environ r,
+        @{PROC}/@{pids}/stat r,
+        @{PROC}/sys/kernel/osrelease r,
+        @{PROC}/tty/drivers r,
+        @{PROC}/uptime r,
+  owner @{PROC}/@{pid}/fd/ r,
+  owner @{PROC}/@{pid}/mounts r,
+
+        /dev/tty@{u8} rw,
+  owner /dev/pts/@{u16} rw,
+
+  profile gpg flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/attached/nameservice-strict>
+    include <abstractions/ssl_certs>
+
+    capability dac_read_search,
+
+    network inet stream,
+    network inet6 stream,
+    network inet dgram,
+    network inet6 dgram,
+
+    @{bin}/gpg{,2} mr,
+    @{bin}/gpgconf mr,
+    @{bin}/gpgsm   mr,
+
+    @{bin}/dirmngr           rix,
+    @{bin}/gpg-agent         rix,
+    @{bin}/gpg-connect-agent rix,
+
+    /etc/pacman.d/gnupg/ rw,
+    /etc/pacman.d/gnupg/** rwkl -> /etc/pacman.d/gnupg/**,
+
+    @{run}/user/@{uid}/gnupg/ w,
+
+    @{HOME}/@{XDG_GPG_DIR}/*.conf r,
+
+    @{PROC}/@{pid}/fd/ r,
+    @{PROC}/@{pid}/task/@{tid}/comm rw,
+
+          /dev/tty@{u8} rw,
+    owner /dev/pts/@{u16} rw,
+
+    deny @{user_share_dirs}/sddm/* rw,
+
+    include if exists <local/pacman_gpg>
+  }
+
+  profile systemctl flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/app/systemctl>
+    include <abstractions/attached/nameservice-strict>
+
+    capability net_admin,
+    capability dac_read_search,
+    capability sys_resource,
+
+    ptrace read peer=@{p_systemd},
+
+    signal send set=cont peer=child-pager,
+    signal send set=(cont term) peer=systemd-tty-ask-password-agent,
+    signal receive set=(term winch) peer=makepkg//sudo,
+
+    @{pager_path}      rpx -> child-pager,
+    @{bin}/systemd-tty-ask-password-agent rpx,
+
+    /etc/machine-id r,
+
+    /{run,var}/log/journal/ r,
+    /{run,var}/log/journal/@{hex32}/ r,
+    /{run,var}/log/journal/@{hex32}/system.journal* r,
+    /{run,var}/log/journal/@{hex32}/system@@{hex}-@{hex}.journal* r,
+    /{run,var}/log/journal/@{hex32}/system@@{hex32}-@{hex16}-@{hex16}.journal* r,
+    /{run,var}/log/journal/@{hex32}/user-@{hex}.journal* r,
+    /{run,var}/log/journal/@{hex32}/user-@{uid}@@{hex}-@{hex}.journal* r,
+    /{run,var}/log/journal/@{hex32}/user-@{uid}@@{hex32}-@{hex16}-@{hex16}.journal* r,
+
+    include if exists <local/pacman_systemctl>
+  }
+
+  profile bus flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/app/bus>
+    include <abstractions/bus-system>
+    include <abstractions/bus/system/org.freedesktop.PackageKit>
+
+    @{bin}/gdbus rix,
+
+    include if exists <local/pacman_bus>
+  }
+
+  profile pkill flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/app/pgrep>
+
+    capability dac_read_search,
+    capability kill,
+
+    signal send,
+
+    @{bin}/killall mr,
+    @{bin}/pkill mr,
+
+    include if exists <local/pacman_pkill>
+  }
+
+  profile kmod flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/app/kmod>
+
+    include if exists <local/pacman_kmod>
+  }
+
+  profile ldconfig flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/attached/consoles>
+
+    capability sys_chroot,
+
+    @{sh_path}              rix,
+    @{sbin}/ldconfig       mrix,
+
+    @{lib}/ r,
+    @{lib}/** rw,
+    /usr/local/ r,
+    /usr/local/lib/ r,
+
+    /opt/**/@{lib}/ r,
+    /opt/**/@{lib}/@{multiarch}/ r,
+    /opt/**/@{lib}/**.so* r,
+
+    /etc/ld.so.cache rw,
+    /etc/ld.so.cache~ rw,
+
+          /var/cache/ldconfig/ rw,
+    owner /var/cache/ldconfig/aux-cache* rw,
+
+    include if exists <local/pacman_ldconfig>
+  }
+
+  include if exists <usr/pacman.d>
+  include if exists <local/pacman>
+}
+
+# vim:syntax=apparmor

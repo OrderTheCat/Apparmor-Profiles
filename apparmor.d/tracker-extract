@@ -1,0 +1,141 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/tracker-extract-3
+@{att} = /att/tracker-extract/
+profile tracker-extract /{,usr/}lib{,exec,32,64}/tracker-extract-3 flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus/session/org.gtk.Private.RemoteVolumeMonitor>
+  include <abstractions/bus/session/org.gtk.vfs.Daemon>
+  include <abstractions/camera>
+  include <abstractions/dconf-write>
+  include <abstractions/deny-sensitive-home>
+  include <abstractions/disks-read>
+  include <abstractions/fontconfig-cache-write>
+  include <abstractions/gnome-strict>
+  include <abstractions/graphics>
+  include <abstractions/gstreamer>
+  include <abstractions/media-control>
+  include <abstractions/attached/nameservice-strict>
+
+  network netlink raw,
+
+  signal (receive) set=(term) peer=gdm,
+
+  #aa/dbus own bus=session name=org.freedesktop.Tracker3.Miner.Extract
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.freedesktop.Tracker3.Miner.Extract{,.*},
+  dbus receive bus=session path=/org/freedesktop/Tracker3/Miner/Extract{,/**}
+       interface=org.freedesktop.Tracker3.Miner.Extract{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/freedesktop/Tracker3/Miner/Extract{,/**}
+       interface=org.freedesktop.Tracker3.Miner.Extract{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/freedesktop/Tracker3/Miner/Extract{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/freedesktop/Tracker3/Miner/Extract{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/freedesktop/Tracker3/Miner/Extract{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.Tracker3.Miner.Extract{,.*}}"),
+  dbus send bus=session path=/org/freedesktop/Tracker3/Miner/Extract{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  #aa/dbus talk bus=session name=org.freedesktop.Tracker3 label=tracker-miner interface+=org.freedesktop.DBus.Peer
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=tracker-miner),
+  # org.freedesktop.Tracker3: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/freedesktop/Tracker3{,/**}
+       interface=org.freedesktop.Tracker3{,.*}
+       peer=(name="{@{busname},org.freedesktop.Tracker3{,.*},org.freedesktop.DBus}", label=tracker-miner),
+  dbus send bus=session path=/org/freedesktop/Tracker3{,/**}
+       interface=org.freedesktop.Tracker3{,.*}
+       peer=(name="org.freedesktop.Tracker3{,.*}"),
+  # org.freedesktop.Tracker3: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/freedesktop/Tracker3{,/**}
+       interface=org.freedesktop.DBus.Peer
+       peer=(name="{@{busname},org.freedesktop.Tracker3{,.*},org.freedesktop.DBus}", label=tracker-miner),
+  dbus send bus=session path=/org/freedesktop/Tracker3{,/**}
+       interface=org.freedesktop.DBus.Peer
+       peer=(name="org.freedesktop.Tracker3{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/freedesktop/Tracker3{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.Tracker3{,.*},org.freedesktop.DBus}", label=tracker-miner),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/freedesktop/Tracker3{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.Tracker3{,.*},org.freedesktop.DBus}", label=tracker-miner),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/freedesktop/Tracker3{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.Tracker3{,.*},org.freedesktop.DBus}", label=tracker-miner),
+  dbus receive bus=session path=/org/freedesktop/Tracker3{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.Tracker3{,.*},org.freedesktop.DBus}", label=tracker-miner),
+
+
+  @{exec_path} mr,
+
+  /usr/share/gdm/greeter/applications/*.desktop r,
+  /usr/share/ladspa/rdf/{,**} r,
+  /usr/share/osinfo/{,**} r,
+  /usr/share/tracker3-miners/{,**} r,
+  /usr/share/tracker3/{,**} r,
+
+  /etc/blkid.conf r,
+  /etc/fstab r,
+
+  owner @{gdm_cache_dirs}/ rw,
+  owner @{gdm_cache_dirs}/fontconfig/[a-f0-9]*.cache-?{,.NEW,.LCK,.TMP-*} rw,
+  owner @{gdm_cache_dirs}/tracker3/{,**} rw,
+
+  # Allow to search user files
+  owner @{HOME}/{,**} r,
+  owner @{MOUNTS}/{,**} r,
+  owner @{tmp}/*/{,**} r,
+
+  owner @{user_cache_dirs}/tracker3/ w,
+  owner @{user_cache_dirs}/tracker3/files/{,**} rwk,
+  owner @{user_share_dirs}/gvfs-metadata/** r,
+
+  owner @{tmp}/tracker-extract-3-files.*/{,*} rw,
+
+  @{run}/blkid/blkid.tab r,
+
+  @{run}/udev/data/c@{dynamic}:@{int} r,  # For dynamic assignment range 234 to 254, 384 to 511
+
+  @{run}/mount/utab r,
+
+  owner @{PROC}/@{pid}/fd/ r,
+  owner @{PROC}/@{pid}/mountinfo r,
+  owner @{PROC}/@{pid}/mounts r,
+  owner @{PROC}/@{pid}/task/@{tid}/comm rw,
+
+  # file_inherit
+  owner /dev/tty@{u8} rw,
+
+  include if exists <local/tracker-extract>
+}
+
+# vim:syntax=apparmor

@@ -1,0 +1,50 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/virtnetworkd
+@{att} = /att/virtnetworkd/
+profile virtnetworkd /{,usr/}bin/virtnetworkd flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-session>
+  include <abstractions/bus-system>
+  include <abstractions/attached/nameservice-strict>
+
+  network netlink raw,
+
+  ptrace (read) peer=virtqemud,
+  ptrace (read) peer=unconfined,
+
+  @{exec_path} mr,
+
+  @{sbin}/dnsmasq rpx,
+
+  /etc/libvirt/*.conf r,
+
+  owner /var/lib/libvirt/dnsmasq/*.macs* rw,
+
+  @{att}@{run}/systemd/inhibit/@{int}.ref rw,
+
+        @{run}/libvirt/network/default.pid r,
+        @{run}/utmp rk,
+  owner @{run}/libvirt/common/system.token rwk,
+  owner @{run}/libvirt/network/{,**} rwk,
+  owner @{run}/user/@{uid}/libvirt/common/system.token rwk,
+  owner @{run}/user/@{uid}/libvirt/network/{,**} rwk,
+  owner @{run}/user/@{uid}/libvirt/virtnetworkd* rwk,
+  owner @{run}/virtnetworkd.pid w,
+
+  @{sys}/devices/system/node/ r,
+  @{sys}/devices/system/node/node@{int}/meminfo r,
+
+  owner @{PROC}/@{pid}/stat r,
+  owner @{PROC}/@{pid}/fd/ r,
+
+  include if exists <local/virtnetworkd>
+}
+
+# vim:syntax=apparmor

@@ -1,0 +1,106 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/bluetooth/obexd
+@{att} = /att/obexd/
+profile obexd /{,usr/}lib{,exec,32,64}/bluetooth/obexd flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-session>
+  include <abstractions/bus-system>
+  include <abstractions/bus/system/org.bluez.ProfileManager1>
+  include <abstractions/contacts-service>
+  include <abstractions/dconf-write>
+  include <abstractions/gschemas>
+  include <abstractions/user-download-strict>
+
+  network bluetooth stream,
+  network bluetooth seqpacket,
+
+  #aa/dbus own bus=session name=org.bluez.obex
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.bluez.obex{,.*},
+  dbus receive bus=session path=/org/bluez/obex{,/**}
+       interface=org.bluez.obex{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/bluez/obex{,/**}
+       interface=org.bluez.obex{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/bluez/obex{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/bluez/obex{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/bluez/obex{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.bluez.obex{,.*}}"),
+  dbus send bus=session path=/org/bluez/obex{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  #aa/dbus talk bus=session name=org.gnome.evolution.dataserver.{Source,Sources@{int}} path=/org/gnome/evolution/dataserver/SourceManager{,/**} label=evolution-source-registry
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=evolution-source-registry),
+  # org.gnome.evolution.dataserver.{Source,Sources@{int}}: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/gnome/evolution/dataserver/SourceManager{,/**}
+       interface=org.gnome.evolution.dataserver.{Source,Sources@{int}}{,.*}
+       peer=(name="{@{busname},org.gnome.evolution.dataserver.{Source,Sources@{int}}{,.*},org.freedesktop.DBus}", label=evolution-source-registry),
+  dbus send bus=session path=/org/gnome/evolution/dataserver/SourceManager{,/**}
+       interface=org.gnome.evolution.dataserver.{Source,Sources@{int}}{,.*}
+       peer=(name="org.gnome.evolution.dataserver.{Source,Sources@{int}}{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/gnome/evolution/dataserver/SourceManager{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gnome.evolution.dataserver.{Source,Sources@{int}}{,.*},org.freedesktop.DBus}", label=evolution-source-registry),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/gnome/evolution/dataserver/SourceManager{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gnome.evolution.dataserver.{Source,Sources@{int}}{,.*},org.freedesktop.DBus}", label=evolution-source-registry),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/gnome/evolution/dataserver/SourceManager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.evolution.dataserver.{Source,Sources@{int}}{,.*},org.freedesktop.DBus}", label=evolution-source-registry),
+  dbus receive bus=session path=/org/gnome/evolution/dataserver/SourceManager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gnome.evolution.dataserver.{Source,Sources@{int}}{,.*},org.freedesktop.DBus}", label=evolution-source-registry),
+
+
+  dbus receive bus=system path=/org/bluez/obex/@{uuid}
+       interface=org.bluez.Profile1
+       member=Release
+       peer=(name=@{busname}, label="@{p_bluetoothd}"),
+
+  dbus receive bus=session
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name=@{busname}, label="{gnome-shell,gnome-extension}"),
+
+  @{exec_path} mr,
+
+  owner @{user_cache_dirs}/ rw,
+  owner @{user_cache_dirs}/obexd/{,**} rw,
+
+  @{run}/systemd/users/@{uid} r,
+
+  include if exists <local/obexd>
+}
+
+# vim:syntax=apparmor

@@ -1,0 +1,32 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/xdg-desktop-icon
+@{att} = ""
+profile xdg-desktop-icon /{,usr/}bin/xdg-desktop-icon flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/common/xdg>
+
+  @{exec_path} r,
+
+  @{bin}/dbus-send            cx -> bus,
+  @{bin}/xprop                px,
+
+  profile bus flags=(complain) {
+    include <abstractions/base-strict>
+    include <abstractions/app/bus>
+    include <abstractions/bus-session>
+    include <abstractions/consoles>
+
+    include if exists <local/xdg-desktop-icon_bus>
+  }
+
+  include if exists <local/xdg-desktop-icon>
+}
+
+# vim:syntax=apparmor

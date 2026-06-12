@@ -1,0 +1,43 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{lib_dirs} = @{lib}/ /snap/{snapd,core}/{,x}@{int}@{lib}
+
+@{exec_path} = @{lib_dirs}/snapd/snap-seccomp
+@{att} = /att/snap-seccomp/
+profile snap-seccomp /{{,usr/}lib{,exec,32,64}/snapd/snap-seccomp,snap/{snapd,core}/{,x}[0-9]{[0-9],}{[0-9],}{[0-9],}{[0-9],}{[0-9],}{[0-9],}{[0-9],}{[0-9],}{[0-9],}/{,usr/}lib{,exec,32,64}/snapd/snap-seccomp} flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+  include <abstractions/attached/nameservice-strict>
+
+  capability dac_read_search,
+
+  network netlink raw,
+
+  @{exec_path} mr,
+  @{lib_dirs}/**.so* mr,
+
+  @{bin}/getent rix,
+
+  /var/lib/snapd/seccomp/bpf/{,**} rw,
+
+  @{sys}/fs/cgroup/system.slice/snapd.service/cpu.max r,
+
+        @{PROC}/@{pid}/cgroup r,
+  owner @{PROC}/@{pids}/mountinfo r,
+
+  /apparmor/.null rw,
+
+  # file_inherit, safe to deny
+  deny owner @{user_share_dirs}/gnome-shell/session.gvdb rw,
+  deny owner @{user_share_dirs}/gvfs-metadata/* r,
+
+  include if exists <local/snap-seccomp>
+}
+
+# vim:syntax=apparmor

@@ -1,0 +1,65 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/gsd-keyboard
+@{att} = /att/gsd-keyboard/
+profile gsd-keyboard /{,usr/}lib{,exec,32,64}/gsd-keyboard flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus/system/org.freedesktop.locale1>
+  include <abstractions/attached/consoles>
+  include <abstractions/dconf-write>
+  include <abstractions/fontconfig-cache-read>
+  include <abstractions/gnome-strict>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/session-manager>
+
+  network inet stream,
+
+  signal (receive) set=(term, hup) peer=gdm*,
+
+  #aa/dbus own bus=session name=org.gnome.SettingsDaemon.Keyboard
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gnome.SettingsDaemon.Keyboard{,.*},
+  dbus receive bus=session path=/org/gnome/SettingsDaemon/Keyboard{,/**}
+       interface=org.gnome.SettingsDaemon.Keyboard{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/SettingsDaemon/Keyboard{,/**}
+       interface=org.gnome.SettingsDaemon.Keyboard{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gnome/SettingsDaemon/Keyboard{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gnome/SettingsDaemon/Keyboard{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gnome/SettingsDaemon/Keyboard{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.SettingsDaemon.Keyboard{,.*}}"),
+  dbus send bus=session path=/org/gnome/SettingsDaemon/Keyboard{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  @{exec_path} mr,
+
+  owner @{gdm_config_dirs}/.gsd-keyboard.settings-ported* rw,
+
+  owner @{user_config_dirs}/.gsd-keyboard.settings-ported* rw,
+  owner @{user_share_dirs}/gnome-settings-daemon/{,input-sources*} rw,
+
+  include if exists <local/gsd-keyboard>
+}
+
+# vim:syntax=apparmor

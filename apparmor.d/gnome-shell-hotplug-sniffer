@@ -1,0 +1,24 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/gnome-shell-hotplug-sniffer
+@{att} = ""
+profile gnome-shell-hotplug-sniffer /{,usr/}lib{,exec,32,64}/gnome-shell-hotplug-sniffer flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/bus-session>
+  include <abstractions/mime>
+
+  @{exec_path} mr,
+
+  @{MOUNTS}/**/ r,
+  @{MOUNTS}/** r,
+
+  include if exists <local/gnome-shell-hotplug-sniffer>
+}
+
+# vim:syntax=apparmor

@@ -1,0 +1,112 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{sbin}/firewalld
+@{att} = /att/firewalld/
+profile firewalld /{,usr/}{,s}bin/firewalld flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-session>
+  include <abstractions/bus-system>
+  include <abstractions/bus/system/org.freedesktop.PolicyKit1>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/network-manager-observe>
+
+  capability dac_read_search,
+  capability mknod,
+  capability net_admin,
+  capability net_raw,
+  capability setpcap,
+
+  network inet raw,
+  network inet6 raw,
+  network netlink raw,
+
+  #aa/dbus own bus=system name=org.fedoraproject.FirewallD1
+  include <abstractions/bus/system/own>
+  dbus bind bus=system name=org.fedoraproject.FirewallD1{,.*},
+  dbus receive bus=system path=/org/fedoraproject/FirewallD1{,/**}
+       interface=org.fedoraproject.FirewallD1{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=system path=/org/fedoraproject/FirewallD1{,/**}
+       interface=org.fedoraproject.FirewallD1{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=system path=/org/fedoraproject/FirewallD1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=system path=/org/fedoraproject/FirewallD1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=system path=/org/fedoraproject/FirewallD1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.fedoraproject.FirewallD1{,.*}}"),
+  dbus send bus=system path=/org/fedoraproject/FirewallD1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  @{exec_path} mr,
+  @{python_path} r,
+
+  @{bin}/ r,
+  @{sbin}/ r,
+  @{bin}/alts                      ix,
+  @{bin}/false                     ix,
+  @{bin}/kmod                      cx -> kmod,
+  @{sbin}/ebtables-legacy          ix,
+  @{sbin}/ebtables-legacy-restore  ix,
+  @{sbin}/ipset                    ix,
+  @{sbin}/xtables-{nft,legacy}-multi rmix,
+
+  /usr/local/lib/@{python_name}/dist-packages/ r,
+
+  /usr/share/iproute2/{,**} r,
+  /usr/share/libalternatives/{,**} r,
+
+  /etc/firewalld/{,**} rw,
+  /etc/iproute2/group r,
+  /etc/iproute2/rt_realms r,
+
+  /var/lib/ebtables/lock rwk,
+
+  /var/log/firewalld rw,
+
+  @{run}/firewalld/{,*} rw,
+  @{run}/xtables.lock rwk,
+
+        @{PROC}/sys/kernel/modprobe r,
+        @{PROC}/sys/net/ipv{4,6}/ip_forward rw,
+  owner @{PROC}/@{pid}/fd/ r,
+  owner @{PROC}/@{pid}/mounts r,
+  owner @{PROC}/@{pids}/net/ip_tables_names r,
+
+  profile kmod flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/app/kmod>
+
+    capability sys_module,
+
+    @{run}/xtables.lock r,
+
+    @{sys}/module/compression r,
+    @{sys}/module/nf_*/initstate r,
+    @{sys}/module/x_tables/initstate r,
+
+    include if exists <local/firewalld_kmod>
+  }
+
+  include if exists <local/firewalld>
+}
+
+# vim:syntax=apparmor

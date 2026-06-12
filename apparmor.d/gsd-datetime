@@ -1,0 +1,83 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/gsd-datetime
+@{att} = /att/gsd-datetime/
+profile gsd-datetime /{,usr/}lib{,exec,32,64}/gsd-datetime flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-session>
+  include <abstractions/bus-system>
+  include <abstractions/bus/system/org.freedesktop.PolicyKit1>
+  include <abstractions/bus/system/org.freedesktop.timedate1>
+  include <abstractions/attached/consoles>
+  include <abstractions/dconf-write>
+  include <abstractions/gschemas>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/session-manager>
+
+  network inet dgram,
+  network inet6 dgram,
+  network inet stream,
+  network inet6 stream,
+  network netlink raw,
+
+  signal receive set=(term, hup) peer=gdm*,
+
+  #aa/dbus own bus=session name=org.gnome.SettingsDaemon.Datetime
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gnome.SettingsDaemon.Datetime{,.*},
+  dbus receive bus=session path=/org/gnome/SettingsDaemon/Datetime{,/**}
+       interface=org.gnome.SettingsDaemon.Datetime{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/SettingsDaemon/Datetime{,/**}
+       interface=org.gnome.SettingsDaemon.Datetime{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gnome/SettingsDaemon/Datetime{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gnome/SettingsDaemon/Datetime{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gnome/SettingsDaemon/Datetime{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.SettingsDaemon.Datetime{,.*}}"),
+  dbus send bus=session path=/org/gnome/SettingsDaemon/Datetime{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  dbus receive bus=session
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name=@{busname}, label="{gnome-shell,gnome-extension}"),
+
+  @{exec_path} mr,
+
+  /usr/share/gnome-settings-daemon/datetime/backward r,
+
+  owner @{user_cache_dirs}/geocode-glib/* r,
+
+  @{run}/systemd/sessions/@{int} r,
+  @{run}/systemd/users/@{uid} r,
+
+        @{PROC}/1/cgroup r,
+  owner @{PROC}/@{pid}/cgroup r,
+  owner @{PROC}/@{pid}/fdinfo/@{int} r,
+  owner @{PROC}/@{pid}/stat r,
+
+  include if exists <local/gsd-datetime>
+}
+
+# vim:syntax=apparmor

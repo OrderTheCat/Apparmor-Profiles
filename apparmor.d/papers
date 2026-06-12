@@ -1,0 +1,105 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/papers
+@{att} = /att/papers/
+profile papers /{,usr/}bin/papers flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus/session/org.freedesktop.portal.Inhibit>
+  include <abstractions/bus/session/org.gtk.Private.RemoteVolumeMonitor>
+  include <abstractions/common/gnome>
+  include <abstractions/enchant>
+  include <abstractions/gvfs>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/nss>
+  include <abstractions/ssl_certs>
+  include <abstractions/user-download-strict>
+  include <abstractions/user-read-strict>
+  include <abstractions/user-write-strict>
+
+  #aa/dbus own bus=session name=org.gnome.Papers
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gnome.Papers{,.*},
+  dbus receive bus=session path=/org/gnome/Papers{,/**}
+       interface=org.gnome.Papers{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/Papers{,/**}
+       interface=org.gnome.Papers{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gnome/Papers{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gnome/Papers{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gnome/Papers{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.Papers{,.*}}"),
+  dbus send bus=session path=/org/gnome/Papers{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  dbus send bus=session path=/org/freedesktop/portal/desktop/session/**
+       interface=org.freedesktop.portal.Session
+       member=Close
+       peer=(name=org.freedesktop.portal.Desktop, label=xdg-desktop-portal),
+
+  dbus send bus=session path=/org/freedesktop/portal/desktop
+       interface=org.freedesktop.portal.Print
+       member={PreparePrint,Print}
+       peer=(name=@{busname}, label=xdg-desktop-portal),
+
+  @{exec_path} mr,
+
+  @{open_path}  cx -> open,
+
+  owner @{user_config_dirs}/cpdb/print-settings r,
+
+  owner @{HOME}/.pki/nssdb/pkcs11.txt r,
+  owner @{HOME}/.mozilla/firefox/*/{cert9,key4}.db rwk,
+  owner @{HOME}/.mozilla/firefox/*/pkcs11.txt rw,
+  owner @{HOME}/.mozilla/firefox/*/{cert9,key4}.db-journal rw,
+
+        /tmp/ r,
+        /var/tmp/ r,
+  owner @{tmp}/.goutputstream-@{rand6} rw,
+  owner @{tmp}/papers-@{int}/{,**} rw,
+  owner @{tmp}/gtkprint_@{rand6} rw,
+  owner @{tmp}/gtkprint@{rand6} rw,
+
+  @{run}/mount/utab r,
+
+        @{PROC}/sys/kernel/random/boot_id r,
+  owner @{PROC}/@{pid}/cgroup r,
+  owner @{PROC}/@{pid}/mountinfo r,
+
+  profile open flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/app/open>
+
+    @{browsers_path}              px,
+    @{help_path}                  px,
+    @{bin}/papers                 px,
+    @{bin}/snap                   px,
+    @{bin}/flatpak                px,
+
+    include if exists <local/papers_open>
+  }
+
+  include if exists <local/papers>
+}
+
+# vim:syntax=apparmor

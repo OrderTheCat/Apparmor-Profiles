@@ -1,0 +1,97 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2018-2022 Mikhail Morfikov
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/{,upower/}upowerd
+@{att} = /att/upowerd/
+profile upowerd /{,usr/}lib{,exec,32,64}/{,upower/}upowerd flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/backlight>
+  include <abstractions/bluetooth-observe>
+  include <abstractions/bus-system>
+  include <abstractions/bus/system/org.freedesktop.login1>
+  include <abstractions/bus/system/org.freedesktop.PolicyKit1>
+  include <abstractions/devices-usb>
+  include <abstractions/input>
+  include <abstractions/sys/dmi>
+
+  capability net_admin,
+  capability sys_admin,
+
+  network netlink raw,
+
+  #aa/dbus own bus=system name=org.freedesktop.UPower
+  include <abstractions/bus/system/own>
+  dbus bind bus=system name=org.freedesktop.UPower{,.*},
+  dbus receive bus=system path=/org/freedesktop/UPower{,/**}
+       interface=org.freedesktop.UPower{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=system path=/org/freedesktop/UPower{,/**}
+       interface=org.freedesktop.UPower{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=system path=/org/freedesktop/UPower{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=system path=/org/freedesktop/UPower{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=system path=/org/freedesktop/UPower{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.UPower{,.*}}"),
+  dbus send bus=system path=/org/freedesktop/UPower{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  @{exec_path} mr,
+
+  /etc/UPower/{,**} r,
+
+  /var/lib/upower/ r,
+  /var/lib/upower/history-*.dat{,.*} rw,
+
+  / r,
+
+  owner /tmp/tmp@{rand8} r,
+  owner /tmp/umockdev.@{rand6}/{,**} rw,
+  owner /tmp/upower-cfg-@{word8} rw,
+  owner /tmp/upower-history-@{word8}/{,**} rw,
+
+  @{run}/udev/data/ r,                    # Lists all udev data files
+  @{run}/udev/data/+acpi:* r,             # Exposes ACPI objects (power buttons, batteries, thermal)
+  @{run}/udev/data/+hid:* r,              # For Human Interface Device (mice, controllers, drawing tablets, scanners)
+  @{run}/udev/data/+i2c:* r,              # For Inter-Integrated Circuit, low-speed peripherals (sensors, EEPROMs, etc.)
+  @{run}/udev/data/+pci:* r,              # Identifies all PCI devices (CPU, GPU, Network, Disks, USB, etc.)
+  @{run}/udev/data/+platform:* r,         # Identifies onboard devices (laptop/board model, power controllers, thermal sensors)
+  @{run}/udev/data/+power_supply:* r,     # For power supply devices (batteries, AC adapters, USB chargers)
+  @{run}/udev/data/+serio:* r,            # for serial mice
+  @{run}/udev/data/+sound:card@{int} r,   # for sound card
+  @{run}/udev/data/c10:@{int} r,          # for non-serial mice, misc features
+  @{run}/udev/data/c14:@{int} r,          # Open Sound System (OSS)
+  @{run}/udev/data/c116:@{int} r,         # for ALSA
+
+  @{att}@{run}/systemd/inhibit/@{int}.ref rw,
+
+  @{sys}/bus/hid/devices/ r,
+  @{sys}/class/power_supply/ r,
+  @{sys}/class/sound/ r,
+  @{sys}/devices/ r,
+  @{sys}/devices/**/power_supply/**/* r,
+  @{sys}/devices/**/uevent r,
+
+  include if exists <local/upowerd>
+}
+
+# vim:syntax=apparmor

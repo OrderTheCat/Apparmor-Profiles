@@ -1,0 +1,220 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/gnome-calendar
+@{att} = /att/gnome-calendar/
+profile gnome-calendar /{,usr/}bin/gnome-calendar flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus/system/org.freedesktop.login1>
+  include <abstractions/bus/system/org.freedesktop.timedate1>
+  include <abstractions/common/gnome>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/network-manager-observe>
+  include <abstractions/p11-kit>
+  include <abstractions/ssl_certs>
+
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+  network netlink raw,
+
+  #aa/dbus own bus=session name=org.gnome.Calendar
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gnome.Calendar{,.*},
+  dbus receive bus=session path=/org/gnome/Calendar{,/**}
+       interface=org.gnome.Calendar{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/Calendar{,/**}
+       interface=org.gnome.Calendar{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gnome/Calendar{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gnome/Calendar{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gnome/Calendar{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.Calendar{,.*}}"),
+  dbus send bus=session path=/org/gnome/Calendar{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  #aa/dbus talk bus=system name=org.freedesktop.GeoClue2 label="@{p_geoclue}"
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label="@{p_geoclue}"),
+  # org.freedesktop.GeoClue2: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/GeoClue2{,/**}
+       interface=org.freedesktop.GeoClue2{,.*}
+       peer=(name="{@{busname},org.freedesktop.GeoClue2{,.*},org.freedesktop.DBus}", label="@{p_geoclue}"),
+  dbus send bus=system path=/org/freedesktop/GeoClue2{,/**}
+       interface=org.freedesktop.GeoClue2{,.*}
+       peer=(name="org.freedesktop.GeoClue2{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/GeoClue2{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.GeoClue2{,.*},org.freedesktop.DBus}", label="@{p_geoclue}"),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/GeoClue2{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.GeoClue2{,.*},org.freedesktop.DBus}", label="@{p_geoclue}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/GeoClue2{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.GeoClue2{,.*},org.freedesktop.DBus}", label="@{p_geoclue}"),
+  dbus receive bus=system path=/org/freedesktop/GeoClue2{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.GeoClue2{,.*},org.freedesktop.DBus}", label="@{p_geoclue}"),
+
+
+  #aa/dbus talk bus=session name=org.gnome.evolution.dataserver label="{evolution-*-factory,evolution-source-registry}"
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label="{evolution-*-factory,evolution-source-registry}"),
+  # org.gnome.evolution.dataserver: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/gnome/evolution/dataserver{,/**}
+       interface=org.gnome.evolution.dataserver{,.*}
+       peer=(name="{@{busname},org.gnome.evolution.dataserver{,.*},org.freedesktop.DBus}", label="{evolution-*-factory,evolution-source-registry}"),
+  dbus send bus=session path=/org/gnome/evolution/dataserver{,/**}
+       interface=org.gnome.evolution.dataserver{,.*}
+       peer=(name="org.gnome.evolution.dataserver{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/gnome/evolution/dataserver{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gnome.evolution.dataserver{,.*},org.freedesktop.DBus}", label="{evolution-*-factory,evolution-source-registry}"),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/gnome/evolution/dataserver{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gnome.evolution.dataserver{,.*},org.freedesktop.DBus}", label="{evolution-*-factory,evolution-source-registry}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/gnome/evolution/dataserver{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.evolution.dataserver{,.*},org.freedesktop.DBus}", label="{evolution-*-factory,evolution-source-registry}"),
+  dbus receive bus=session path=/org/gnome/evolution/dataserver{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gnome.evolution.dataserver{,.*},org.freedesktop.DBus}", label="{evolution-*-factory,evolution-source-registry}"),
+
+  #aa/dbus talk bus=session name=org.gnome.OnlineAccounts label=goa-daemon
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=goa-daemon),
+  # org.gnome.OnlineAccounts: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/gnome/OnlineAccounts{,/**}
+       interface=org.gnome.OnlineAccounts{,.*}
+       peer=(name="{@{busname},org.gnome.OnlineAccounts{,.*},org.freedesktop.DBus}", label=goa-daemon),
+  dbus send bus=session path=/org/gnome/OnlineAccounts{,/**}
+       interface=org.gnome.OnlineAccounts{,.*}
+       peer=(name="org.gnome.OnlineAccounts{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/gnome/OnlineAccounts{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gnome.OnlineAccounts{,.*},org.freedesktop.DBus}", label=goa-daemon),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/gnome/OnlineAccounts{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gnome.OnlineAccounts{,.*},org.freedesktop.DBus}", label=goa-daemon),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/gnome/OnlineAccounts{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.OnlineAccounts{,.*},org.freedesktop.DBus}", label=goa-daemon),
+  dbus receive bus=session path=/org/gnome/OnlineAccounts{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gnome.OnlineAccounts{,.*},org.freedesktop.DBus}", label=goa-daemon),
+
+  #aa/dbus talk bus=session name=org.gnome.SettingsDaemon.Color label=gsd-color
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=gsd-color),
+  # org.gnome.SettingsDaemon.Color: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/gnome/SettingsDaemon/Color{,/**}
+       interface=org.gnome.SettingsDaemon.Color{,.*}
+       peer=(name="{@{busname},org.gnome.SettingsDaemon.Color{,.*},org.freedesktop.DBus}", label=gsd-color),
+  dbus send bus=session path=/org/gnome/SettingsDaemon/Color{,/**}
+       interface=org.gnome.SettingsDaemon.Color{,.*}
+       peer=(name="org.gnome.SettingsDaemon.Color{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/gnome/SettingsDaemon/Color{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gnome.SettingsDaemon.Color{,.*},org.freedesktop.DBus}", label=gsd-color),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/gnome/SettingsDaemon/Color{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gnome.SettingsDaemon.Color{,.*},org.freedesktop.DBus}", label=gsd-color),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/gnome/SettingsDaemon/Color{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.SettingsDaemon.Color{,.*},org.freedesktop.DBus}", label=gsd-color),
+  dbus receive bus=session path=/org/gnome/SettingsDaemon/Color{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gnome.SettingsDaemon.Color{,.*},org.freedesktop.DBus}", label=gsd-color),
+
+  #aa/dbus talk bus=session name=org.gnome.Shell.SearchProvider2 path=/org/gnome/Calendar/SearchProvider label=gnome-shell
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=gnome-shell),
+  # org.gnome.Shell.SearchProvider2: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/gnome/Calendar/SearchProvider
+       interface=org.gnome.Shell.SearchProvider2{,.*}
+       peer=(name="{@{busname},org.gnome.Shell.SearchProvider2{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  dbus send bus=session path=/org/gnome/Calendar/SearchProvider
+       interface=org.gnome.Shell.SearchProvider2{,.*}
+       peer=(name="org.gnome.Shell.SearchProvider2{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/gnome/Calendar/SearchProvider
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gnome.Shell.SearchProvider2{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/gnome/Calendar/SearchProvider
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gnome.Shell.SearchProvider2{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/gnome/Calendar/SearchProvider
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.Shell.SearchProvider2{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  dbus receive bus=session path=/org/gnome/Calendar/SearchProvider
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gnome.Shell.SearchProvider2{,.*},org.freedesktop.DBus}", label=gnome-shell),
+
+
+  @{exec_path} mr,
+  @{open_path}  rpx -> child-open-help,
+
+  /usr/share/evolution-data-server/{,**} r,
+  /usr/share/libgweather/Locations.xml r,
+
+  owner @{tmp}/pid-@{pid}/*.ics r,
+
+  include if exists <local/gnome-calendar>
+}
+
+# vim:syntax=apparmor

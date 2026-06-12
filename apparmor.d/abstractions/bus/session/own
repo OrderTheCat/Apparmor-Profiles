@@ -1,0 +1,28 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+# LOGPROF-SUGGEST: no
+
+# Allow owning a name on DBus public bus
+#
+# !!! warning
+#
+#     Do not use it manually, It is automatically included in a profile by the
+#     `aa:dbus own` directive.
+#
+
+  abi <abi/4.0>,
+
+  dbus send bus=session path=/{,org/freedesktop/DBus,org/freedesktop/DBus/Bus}
+       interface=org.freedesktop.DBus
+       member={ListNames,RequestName,ReleaseName}
+       peer=(name=org.freedesktop.DBus, label="@{p_dbus_session}"),
+
+  dbus send bus=session path=/{,org/freedesktop/DBus,org/freedesktop/DBus/Bus}
+       interface=org.freedesktop.DBus
+       member={GetConnectionUnixProcessID,GetConnectionUnixUser,GetConnectionCredentials}
+       peer=(name=org.freedesktop.DBus, label="@{p_dbus_session}"),
+
+  include if exists <abstractions/bus/session/own.d>
+
+# vim:syntax=apparmor

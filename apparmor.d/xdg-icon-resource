@@ -1,0 +1,40 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2018-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/xdg-icon-resource
+@{att} = /att/xdg-icon-resource/
+profile xdg-icon-resource /{,usr/}bin/xdg-icon-resource flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/common/xdg>
+  include <abstractions/attached/consoles>
+  include <abstractions/icons>
+  include <abstractions/attached/nameservice-strict>
+
+  @{exec_path} r,
+  @{sh_path} r,
+
+  @{bin}/dbus-send                 cx -> bus,
+  @{bin}/gtk{,4}-update-icon-cache px,
+  @{bin}/xprop                     px,
+
+  /usr/local/share/icons/** w,
+
+  profile bus flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/app/bus>
+    include <abstractions/bus-session>
+    include <abstractions/attached/consoles>
+
+    include if exists <local/xdg-icon-resource_bus>
+  }
+
+  include if exists <local/xdg-icon-resource>
+}
+
+# vim:syntax=apparmor

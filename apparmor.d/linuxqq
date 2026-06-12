@@ -1,0 +1,48 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 EricLin <ericlin050914@gmail.com>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{name} = QQ
+@{domain} = org.chromium.Chromium
+@{lib_dirs} = /opt/QQ/
+@{config_dirs} = @{user_config_dirs}/@{name}
+@{cache_dirs} = @{user_cache_dirs}/@{name}
+
+@{exec_path} = @{bin}/linuxqq @{lib_dirs}/qq
+@{att} = /att/linuxqq/
+profile linuxqq /{{,usr/}bin/linuxqq,opt/QQ/qq} flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+  include <abstractions/audio-client>
+  include <abstractions/common/electron>
+
+  network netlink raw,
+  network netlink dgram,
+  network inet stream,
+  network inet dgram,
+  network inet6 dgram,
+  network inet6 stream,
+
+  @{exec_path} mrix,
+
+  @{sh_path}  r,
+  @{bin}/{,e}grep rix,
+  @{lib_dirs}/resources/app/{,**} m,
+
+  @{open_path}         rpx -> child-open-strict,
+
+  @{run}/utmp r,
+
+  owner @{PROC}/@{pid}/loginuid r,
+  owner @{PROC}/@{pid}/mounts r,
+
+  /dev/tty rw,
+
+  include if exists <local/linuxqq>
+}
+
+# vim:syntax=apparmor

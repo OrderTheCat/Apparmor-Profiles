@@ -1,0 +1,195 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{appid} = @{word}.@{word}.@{word}{,.@{word}}
+
+@{exec_path} = @{lib}/flatpak-system-helper
+@{att} = /att/flatpak-system-helper/
+profile flatpak-system-helper /{,usr/}lib{,exec,32,64}/flatpak-system-helper flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+  include <abstractions/attached/base>
+  include <abstractions/accounts-observe>
+  include <abstractions/bus-system>
+  include <abstractions/bus/system/org.freedesktop.PolicyKit1>
+  include <abstractions/mime>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/p11-kit>
+  include <abstractions/ssl_certs>
+
+  capability chown,
+  capability dac_override,
+  capability dac_read_search,
+  capability fowner,
+  capability net_admin,
+  capability setgid,
+  capability setuid,
+  capability sys_nice,
+  capability sys_ptrace,
+
+  network inet6 dgram,
+
+  ptrace read,
+
+  unix type=seqpacket peer=(label=dbus-system),
+  unix type=seqpacket peer=(label=flatpak),
+  unix type=seqpacket peer=(label=flatpak//fusermount),
+  unix type=seqpacket peer=(label=gnome-software),
+  unix type=seqpacket peer=(label=gnome-software//fusermount),
+  unix type=seqpacket peer=(label=unconfined),
+  unix type=seqpacket peer=(label=bazaar),
+  unix type=seqpacket peer=(label=bazaar//fusermount),
+
+  #aa/dbus own bus=system name=org.freedesktop.Flatpak.SystemHelper
+  include <abstractions/bus/system/own>
+  dbus bind bus=system name=org.freedesktop.Flatpak.SystemHelper{,.*},
+  dbus receive bus=system path=/org/freedesktop/Flatpak/SystemHelper{,/**}
+       interface=org.freedesktop.Flatpak.SystemHelper{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=system path=/org/freedesktop/Flatpak/SystemHelper{,/**}
+       interface=org.freedesktop.Flatpak.SystemHelper{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=system path=/org/freedesktop/Flatpak/SystemHelper{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=system path=/org/freedesktop/Flatpak/SystemHelper{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=system path=/org/freedesktop/Flatpak/SystemHelper{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.Flatpak.SystemHelper{,.*}}"),
+  dbus send bus=system path=/org/freedesktop/Flatpak/SystemHelper{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  @{exec_path} mr,
+
+  @{bin}/bwrap          rcx -> bwrap,
+  @{bin}/gpg{,2}        rcx -> gpg,
+  @{bin}/gpgconf        rcx -> gpg,
+  @{bin}/gpgsm          rcx -> gpg,
+  @{lib}/revokefs-fuse  rix,
+
+  /etc/flatpak/{,**} r,
+  /etc/machine-id r,
+
+  /usr/share/flatpak/remotes.d/{,**} r,
+  /usr/share/flatpak/triggers/ r,
+
+  /var/lib/flatpak/{,**} rwkl,
+  /var/tmp/flatpak-cache-*/{,**} rw,
+
+  owner /{var/,}tmp/#@{int} rw,
+  owner /{var/,}tmp/ostree-gpg-@{rand6}/ rw,
+  owner @{tmp}/ostree-gpg-@{rand6}/** rwkl -> /tmp/ostree-gpg-@{rand6}/**,
+
+  @{tmp}/remote-summary-sig.@{rand6} r,
+  @{tmp}/remote-summary.@{rand6} r,
+
+        @{PROC}/@{pids}/cgroup r,
+        @{PROC}/@{pids}/stat r,
+        @{PROC}/@{pids}/status r,
+  owner @{PROC}/@{pid}/fd/ r,
+  owner @{PROC}/@{pid}/fdinfo/@{int} r,
+
+  profile bwrap flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+    include <abstractions/attached/base>
+    include <abstractions/bwrap>
+    include <abstractions/attached/nameservice-strict>
+
+    capability dac_override,
+    capability dac_read_search,
+    capability sys_resource,
+
+    @{bin}/bwrap   mr,
+
+    /app/bin/*    rix,
+
+    @{bin}/bsdtar  ix,
+    @{bin}/cp      ix,
+    @{bin}/install ix,
+    @{bin}/mv      ix,
+    @{bin}/rm      ix,
+    @{bin}/sed     ix,
+    @{bin}/tar     ix,
+    @{bin}/xz      ix,
+
+    @{bin}/gtk{,4}-update-icon-cache  px -> flatpak-system-helper//bwrap//&gtk-update-icon-cache,
+    @{bin}/update-desktop-database    px -> flatpak-system-helper//bwrap//&update-desktop-database,
+    @{bin}/update-mime-database       px -> flatpak-system-helper//bwrap//&update-mime-database,
+
+    /usr/share/flatpak/triggers/desktop-database.trigger ix,
+    /usr/share/flatpak/triggers/gtk-icon-cache.trigger   ix,
+    /usr/share/flatpak/triggers/mime-database.trigger    ix,
+
+    @{system_share_dirs}/** r,
+    @{system_share_dirs}/*ubuntu/applications/.mimeinfo.cache.* rw,
+    @{system_share_dirs}/*ubuntu/applications/mimeinfo.cache w,
+    @{system_share_dirs}/applications/.mimeinfo.cache.* w,
+    @{system_share_dirs}/applications/mimeinfo.cache w,
+    @{system_share_dirs}/icons/**/.icon-theme.cache rw,
+    @{system_share_dirs}/icons/**/icon-theme.cache w,
+    @{system_share_dirs}/icons/hicolor/index.theme w,
+    @{system_share_dirs}/mime/{,**} w,
+
+    @{user_share_dirs}/** r,
+    @{user_share_dirs}/.mimeinfo.cache.* w,
+    @{user_share_dirs}/**/.icon-theme.cache w,
+    @{user_share_dirs}/**/icon-theme.cache w,
+    @{user_share_dirs}/applications/.mimeinfo.cache.* w,
+    @{user_share_dirs}/applications/mimeinfo.cache w,
+    @{user_share_dirs}/mime/{,**} w,
+    @{user_share_dirs}/mimeinfo.cache w,
+
+    /app/extra/** rw,
+    /bindfile@{rand6} rw,
+    /usr/.ref rk,
+
+    /tmp/#@{int} rw,
+
+    /dev/tty rw,
+
+    include if exists <local/flatpak-system-helper_bwrap>
+  }
+
+  profile gpg flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+    include <abstractions/attached/base>
+    include <abstractions/attached/nameservice-strict>
+
+    @{bin}/gpg{,2}  mr,
+    @{bin}/gpgconf  mr,
+    @{bin}/gpgsm    mr,
+
+    @{lib}/{,gnupg/}scdaemon rix,
+    @{bin}/gpg-agent rix,
+
+    owner @{tmp}/ostree-gpg-@{rand6}/ r,
+    owner @{tmp}/ostree-gpg-@{rand6}/** rwkl -> /tmp/ostree-gpg-@{rand6}/**,
+
+    @{run}/user/@{uid}/gnupg/ r,
+    @{run}/user/@{uid}/gnupg/d.@{rand}/ rw,
+    @{run}/user/@{uid}/gnupg/d.@{rand}/S.gpg-agent{,.ssh,.browser,.extra} rw,
+    @{run}/user/@{uid}/gnupg/d.@{rand}/S.scdaemon rw,
+    @{run}/user/@{uid}/gnupg/S.scdaemon rw,
+
+    owner @{PROC}/@{pid}/fd/ r,
+    owner @{PROC}/@{pid}/task/@{tid}/comm rw,
+
+    include if exists <local/flatpak-system-helper_gpg>
+  }
+
+  include if exists <local/flatpak-system-helper>
+}
+
+# vim:syntax=apparmor

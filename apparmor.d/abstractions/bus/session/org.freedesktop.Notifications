@@ -1,0 +1,28 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+  abi <abi/4.0>,
+
+  # DBus.Introspectable: allow clients to introspect the service
+
+  dbus send bus=session path=/org/freedesktop/Notifications
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name=@{busname}, label="@{pp_notification}"),
+
+  # org.freedesktop.Notifications
+
+  dbus send bus=session path=/org/freedesktop/Notifications
+       interface=org.freedesktop.Notifications
+       member={GetCapabilities,GetServerInformation,Notify,CloseNotification}
+       peer=(label="@{pp_notification}"),
+
+  dbus receive bus=session path=/org/freedesktop/Notifications
+       interface=org.freedesktop.Notifications
+       member={ActivationToken,ActionInvoked,NotificationClosed,NotificationReplied}
+       peer=(label="@{pp_notification}"),
+
+  include if exists <abstractions/bus/session/org.freedesktop.Notifications.d>
+
+# vim:syntax=apparmor

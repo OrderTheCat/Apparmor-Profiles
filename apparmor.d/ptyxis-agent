@@ -1,0 +1,81 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/ptyxis-agent
+@{att} = /att/ptyxis-agent/
+profile ptyxis-agent /{,usr/}lib{,exec,32,64}/ptyxis-agent flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-session>
+  include <abstractions/bus-system>
+  include <abstractions/bus/session/org.gtk.vfs.MountTracker>
+  include <abstractions/attached/consoles>
+  include <abstractions/dconf-write>
+  include <abstractions/gschemas>
+  include <abstractions/attached/nameservice-strict>
+
+  signal send set=hup peer=@{p_systemd},
+  signal send set=kill,
+
+  ptrace read,
+
+  unix type=stream peer=(label=ptyxis),
+
+  dbus receive bus=session
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name=@{busname}, label="{gnome-shell,gnome-extension}"),
+
+  @{exec_path} mr,
+
+  @{bin}/podman       pux,
+  @{bin}/systemd-run  cx -> shell,
+
+  owner @{user_config_dirs}/gnome-xdg-terminals.list rw,
+  owner @{user_config_dirs}/gnome-xdg-terminals.list.@{rand6} rw,
+  owner @{user_config_dirs}/xdg-terminals.list rw,
+  owner @{user_config_dirs}/xdg-terminals.list.@{rand6} rw,
+
+  owner @{user_share_dirs}/containers/ w,
+  owner @{user_share_dirs}/containers/storage/ w,
+  owner @{user_share_dirs}/containers/storage/overlay-containers/ w,
+
+  @{PROC}/@{pid}/cmdline r,
+
+  /dev/ptmx rw,
+
+  profile shell flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/attached/consoles>
+
+    signal send,
+
+    unix bind type=stream addr=@@{udbus}/bus/systemd-run/,
+
+    @{bin}/systemd-run mr,
+    @{bin}/env ix,
+
+    # The shell is not confined on purpose.
+    @{bin}/@{shells}   ux,
+
+    # Some CLI program can be launched directly from Gnome Shell
+    @{lib}/**                     pux,
+    @{bin}/**                     pux,
+    /opt/*/**                     pux,
+    /usr/share/*/**               pux,
+    /usr/local/bin/**             pux,
+    /usr/games/**                 pux,
+
+    owner @{run}/user/@{uid}/systemd/private rw,
+
+    include if exists <local/ptyxis-agent_shell>
+  }
+
+  include if exists <local/ptyxis-agent>
+}
+
+# vim:syntax=apparmor

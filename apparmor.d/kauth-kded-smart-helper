@@ -1,0 +1,65 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/{,kf6/}kauth/{,libexec/}kded-smart-helper
+@{att} = /att/kauth-kded-smart-helper/
+profile kauth-kded-smart-helper /{,usr/}lib{,exec,32,64}/{,kf6/}kauth/{,libexec/}kded-smart-helper flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-system>
+  include <abstractions/bus/system/org.freedesktop.PolicyKit1>
+  include <abstractions/attached/nameservice-strict>
+
+  #aa/dbus own bus=system name=org.kde.kded.smart
+  include <abstractions/bus/system/own>
+  dbus bind bus=system name=org.kde.kded.smart{,.*},
+  dbus receive bus=system path=/org/kde/kded/smart{,/**}
+       interface=org.kde.kded.smart{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=system path=/org/kde/kded/smart{,/**}
+       interface=org.kde.kded.smart{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=system path=/org/kde/kded/smart{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=system path=/org/kde/kded/smart{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=system path=/org/kde/kded/smart{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.kde.kded.smart{,.*}}"),
+  dbus send bus=system path=/org/kde/kded/smart{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  dbus receive bus=system path=/
+       interface=org.kde.kf5auth
+       member=performAction
+       peer=(name=@{busname}, label=kded),
+  dbus send bus=system path=/
+       interface=org.kde.kf5auth
+       member=remoteSignal
+       peer=(name=org.freedesktop.DBus, label=kded),
+
+  @{exec_path} mr,
+
+  @{sbin}/smartctl rpx,
+
+  /usr/share/icu/@{int}.@{int}/*.dat r,
+
+  include if exists <local/kauth-kded-smart-helper>
+}
+
+# vim:syntax=apparmor

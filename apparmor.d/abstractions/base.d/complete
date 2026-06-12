@@ -1,0 +1,46 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2020-2022 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+  # Profiles in apparmor.d now use base-strict. Therefore, these additions to
+  # the base abstraction are only needed for other profiles in order to integrate
+  # them with apparmor.d
+
+  include <abstractions/locale>
+  include <abstractions/lttng>
+
+
+  # Systemd: allow to receive any signal from the systemd profiles
+  signal receive                           peer=@{p_systemd},
+  signal receive                           peer=@{p_systemd_user},
+
+  # Htop like programs can send any signals to any processes
+  signal receive                           peer=btop,
+  signal receive                           peer=htop,
+  signal receive                           peer=pkill,
+  signal receive                           peer=resources//kill,
+  signal receive                           peer=top,
+  signal receive set=(cont,term,kill,stop) peer=gnome-system-monitor,
+
+  # Allow to receive termination signal from manager such as sudo, login, shutdown or systemd
+  signal receive                           peer=su,
+  signal receive                           peer=sudo,
+  signal receive                           peer=sudo-rs,
+  signal receive set=(cont,term,kill,stop) peer=gnome-shell,
+  signal receive set=(cont,term,kill,stop) peer=login,
+  signal receive set=(cont,term,kill,stop) peer=systemd-shutdown,
+  signal receive set=(cont,term,kill,stop) peer=xinit,
+
+  # When apparmor re-attaches disconnected path using /,
+  /systemd/journal/dev-log w,
+  /systemd/journal/socket w,
+  /systemd/journal/stdout rw,
+  /systemd/notify w,
+
+  # Controls how core dump files are named
+  @{PROC}/sys/kernel/core_pattern r,
+
+  /apparmor/.null rw,
+
+# vim:syntax=apparmor

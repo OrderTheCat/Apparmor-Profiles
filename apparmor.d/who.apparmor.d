@@ -1,0 +1,40 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2019-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/who
+@{att} = /att/who/
+profile who /{,usr/}bin/who flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/wutmp>
+
+  capability kill,
+
+  @{exec_path} mr,
+
+  @{run}/systemd/sessions/* r,
+
+  # Rotated logs from wutmp
+  /var/log/wtmp.@{int} r,
+  /var/log/btmp.@{int} r,
+
+  # Deny the writes allowed by abstractions/wutmp
+  audit deny /var/** w,
+  audit deny @{run}/utmp w,
+
+  # file_inherit
+  deny owner @{user_share_dirs}/gnome-shell/session.gvdb rw,
+  deny owner @{user_share_dirs}/gvfs-metadata/{,*} r,
+  deny owner @{user_share_dirs}/zed/**/data.mdb rw,
+  deny /dev/pts/@{u16} rw,
+  deny /dev/tty/@{u8} rw,
+
+  include if exists <local/who>
+}
+
+# vim:syntax=apparmor

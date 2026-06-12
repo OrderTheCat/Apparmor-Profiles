@@ -1,0 +1,19 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2022 Jeroen Rijken
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{sbin}/dmeventd
+@{att} = ""
+profile dmeventd /{,usr/}{,s}bin/dmeventd flags=(complain) {
+  include <abstractions/base-strict>
+
+  @{exec_path} rm,
+
+  include if exists <local/dmeventd>
+}
+
+# vim:syntax=apparmor

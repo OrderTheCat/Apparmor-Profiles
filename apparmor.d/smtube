@@ -1,0 +1,70 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2017-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/smtube
+@{att} = ""
+profile smtube /{,usr/}bin/smtube flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/consoles>
+  include <abstractions/desktop>
+  include <abstractions/graphics>
+  include <abstractions/gstreamer>
+  include <abstractions/nameservice-strict>
+  include <abstractions/qt5-compose-cache-write>
+  include <abstractions/ssl_certs>
+
+  network inet dgram,
+  network inet6 dgram,
+  network inet stream,
+  network inet6 stream,
+  network netlink dgram,
+  network netlink raw,
+
+  @{exec_path} mr,
+
+  # Players
+  @{bin}/mpv        rpux,
+  @{bin}/smplayer   rpux,
+  @{bin}/vlc        rpux,
+  @{bin}/cvlc       rpux,
+  @{bin}/youtube-dl rpux,
+  @{bin}/yt-dlp     rpux,
+
+  @{open_path}       rpx -> child-open,
+
+  # SMTube config files
+  owner @{user_config_dirs}/smtube/ rw,
+  owner @{user_config_dirs}/smtube/* rwkl -> @{user_config_dirs}/smtube/#@{int},
+
+  # Needed for updating YT code
+  owner @{user_config_dirs}/smplayer/yt.js rw,
+
+  owner @{user_config_dirs}/smplayer/#@{int} rw,
+  owner @{user_config_dirs}/smplayer/hdpi.ini rw,
+  owner @{user_config_dirs}/smplayer/hdpi.ini.lock rwk,
+  owner @{user_config_dirs}/smplayer/hdpi.ini.* rwl -> @{user_config_dirs}/smplayer/#@{int},
+
+  # Cache
+  owner @{user_cache_dirs}/ rw,
+  owner @{user_cache_dirs}/smtube/ rw,
+  owner @{user_cache_dirs}/smtube/* rwk,
+
+  /dev/shm/#@{int} rw,
+
+  deny owner @{PROC}/@{pid}/cmdline r,
+       owner @{PROC}/@{pid}/fd/ r,
+  deny       @{PROC}/sys/kernel/random/boot_id r,
+
+  # file_inherit
+  owner /dev/tty@{u8} rw,
+
+  include if exists <local/smtube>
+}
+
+# vim:syntax=apparmor

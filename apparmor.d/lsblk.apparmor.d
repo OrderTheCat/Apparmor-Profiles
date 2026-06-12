@@ -1,0 +1,39 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2019-2021 Mikhail Morfikov
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/lsblk
+@{att} = /att/lsblk/
+profile lsblk /{,usr/}bin/lsblk flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+  include <abstractions/disks-read>
+  include <abstractions/attached/nameservice-strict>
+
+  capability dac_read_search,
+  audit capability dac_override,
+
+  @{exec_path} mr,
+
+  / r,
+
+        @{PROC}/swaps r,
+  owner @{PROC}/@{pid}/mountinfo r,
+
+  @{run}/mount/utab r,
+
+  # File Inherit
+  deny network inet stream,
+  deny network inet6 stream,
+  deny owner @{user_share_dirs}/gnome-shell/session.gvdb rw,
+  deny /dev/udmabuf rw,
+
+  include if exists <local/lsblk>
+}
+
+# vim:syntax=apparmor

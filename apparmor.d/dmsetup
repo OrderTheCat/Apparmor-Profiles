@@ -1,0 +1,29 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{sbin}/dmsetup
+@{att} = ""
+profile dmsetup /{,usr/}{,s}bin/dmsetup flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/consoles>
+  include <abstractions/disks-write>
+
+  capability sys_admin,
+
+  @{exec_path} mr,
+
+  @{PROC}/devices r,
+
+  /tmp/tmp.@{rand10}/mkinitramfs_@{rand6}/cryptroot/crypttab w, # file_inherit
+  /var/tmp/mkinitramfs_@{rand6}/cryptroot/crypttab w, # file_inherit
+
+
+  include if exists <local/dmsetup>
+}
+
+# vim:syntax=apparmor

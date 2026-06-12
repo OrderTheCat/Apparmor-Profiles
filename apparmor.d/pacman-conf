@@ -1,0 +1,34 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/pacman-conf
+@{att} = /att/pacman-conf/
+profile pacman-conf /{,usr/}bin/pacman-conf flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+
+  @{exec_path} mr,
+
+  /usr/share/devtools/pacman.conf.d/* r,
+
+  /etc/pacman.conf r,
+  /etc/pacman.d/mirrorlist r,
+  /etc/pacman.d/*-mirrorlist r,
+
+  /var/lib/archbuild/extra-@{arch}/*/etc/pacman.conf r,
+
+  /dev/tty@{u8} rw,
+
+  # Inherit Silencer
+  deny network inet6 stream,
+  deny network inet stream,
+
+  include if exists <local/pacman-conf>
+}
+
+# vim:syntax=apparmor

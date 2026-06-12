@@ -1,0 +1,65 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/{,gvfs/}gvfsd-sftp
+@{att} = ""
+profile gvfsd-sftp /{,usr/}lib{,exec,32,64}/{,gvfs/}gvfsd-sftp flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/bus-session>
+  include <abstractions/consoles>
+  include <abstractions/gvfs-backend>
+  include <abstractions/mime>
+  include <abstractions/nameservice-strict>
+  include <abstractions/secrets-service>
+
+  #aa/dbus own bus=session name=org.gtk.vfs.mountpoint_@{int}
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gtk.vfs.mountpoint_@{int}{,.*},
+  dbus receive bus=session path=/org/gtk/vfs/mountpoint_@{int}{,/**}
+       interface=org.gtk.vfs.mountpoint_@{int}{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gtk/vfs/mountpoint_@{int}{,/**}
+       interface=org.gtk.vfs.mountpoint_@{int}{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gtk/vfs/mountpoint_@{int}{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gtk/vfs/mountpoint_@{int}{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gtk/vfs/mountpoint_@{int}{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gtk.vfs.mountpoint_@{int}{,.*}}"),
+  dbus send bus=session path=/org/gtk/vfs/mountpoint_@{int}{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  @{exec_path} mr,
+
+  @{bin}/ssh  rpx,
+
+  owner @{run}/user/@{uid}/gvfsd-sftp/ rw,
+  owner @{run}/user/@{uid}/gvfsd/socket-@{rand8} w,
+
+  owner @{PROC}/@{pid}/fd/ r,
+
+  /dev/ptmx rw,
+
+  include if exists <local/gvfsd-sftp>
+}
+
+# vim:syntax=apparmor

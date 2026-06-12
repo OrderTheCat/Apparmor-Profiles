@@ -1,0 +1,65 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/systemd-dissect
+@{att} = /att/systemd-dissect/
+profile systemd-dissect /{,usr/}bin/systemd-dissect flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+  include <abstractions/disks-read>
+  include <abstractions/common/systemd>
+
+  capability dac_read_search,
+  capability sys_admin,
+  capability sys_resource,
+
+  mount                                             -> /tmp/dissect-@{rand6}/,
+  mount fstype=tmpfs options=(rw nodev)      rootfs -> @{run}/systemd/dissect-root/,
+  mount options=(ro nodev)         @{att}/dev/loop* -> @{run}/systemd/dissect-root/{,**/},
+  mount options=(rw nodev)                          -> /mnt/*/,
+  mount options=(rw rshared make-rslave)               /,
+
+  umount @{run}/systemd/dissect-root/,
+
+  signal send set=cont peer=child-pager,
+
+  ptrace read peer=@{p_systemd},
+
+  @{exec_path} mr,
+
+  @{sbin}/fsck  rpx,
+  @{pager_path} rpx -> child-pager,
+
+  # Location of file system OS images
+  @{user_build_dirs}/{,**} r,
+  @{user_pkg_dirs}/{,**} r,
+  @{user_projects_dirs}/{,**} r,
+  @{user_vm_dirs}/{,**} r,
+
+  owner @{tmp}/dissect-@{rand6}/{,**} rw,
+
+  @{run}/systemd/dissect-root/ rw,
+  @{run}/systemd/dissect-root/** rwlk,
+
+  @{sys}/devices/virtual/block/loop@{int}/{,**} r,
+  @{sys}/kernel/uevent_seqnum r,
+
+  @{PROC}/@{pid}/cgroup r,
+  @{PROC}/@{pid}/mountinfo r,
+
+        /dev/loop* rwk,
+  @{att}/dev/loop* wk,
+
+  /dev/btrfs-control rw,
+  /dev/loop-control rwk,
+  /dev/mapper/control w,
+
+  include if exists <local/systemd-dissect>
+}
+
+# vim:syntax=apparmor

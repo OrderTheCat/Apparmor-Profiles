@@ -1,0 +1,34 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2019-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{sbin}/unix_chkpwd
+@{att} = /att/unix-chkpwd/
+profile unix-chkpwd /{,usr/}{,s}bin/unix_chkpwd flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+  include <abstractions/attached/nameservice-strict>
+
+  capability audit_write,
+  capability dac_read_search,  # To read shadow with 000 permissions.
+
+  network netlink raw,
+
+  @{exec_path} mr,
+
+  /etc/machine-id r,
+  /etc/shadow r,
+
+  # systemd userdb, used in nspawn
+  @{run}/host/userdb/*.user r,
+  @{run}/host/userdb/*.user-privileged r,
+
+  include if exists <local/unix-chkpwd>
+}
+
+# vim:syntax=apparmor

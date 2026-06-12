@@ -1,0 +1,80 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/fractal
+@{att} = /att/fractal/
+profile fractal /{,usr/}bin/fractal flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/audio-client>
+  include <abstractions/common/gnome>
+  include <abstractions/gstreamer>
+  include <abstractions/gvfs>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/network-manager-observe>
+  include <abstractions/sqlite>
+  include <abstractions/ssl_certs>
+  include <abstractions/user-download-strict>
+
+  network inet dgram,
+  network inet stream,
+  network inet6 dgram,
+  network inet6 stream,
+  network netlink raw,
+
+  #aa/dbus own bus=session name=org.gnome.Fractal
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gnome.Fractal{,.*},
+  dbus receive bus=session path=/org/gnome/Fractal{,/**}
+       interface=org.gnome.Fractal{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/Fractal{,/**}
+       interface=org.gnome.Fractal{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gnome/Fractal{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gnome/Fractal{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gnome/Fractal{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.Fractal{,.*}}"),
+  dbus send bus=session path=/org/gnome/Fractal{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  @{exec_path} mr,
+
+  @{open_path}  rpx -> child-open-help,
+
+  /usr/share/xml/iso-codes/{,**} r,
+
+  owner @{tmp}/.@{rand6} rw,
+  owner @{tmp}/.goutputstream-@{rand6} rw,
+  owner @{tmp}/@{rand6} rw,
+
+  owner @{run}/user/@{uid}/fractal/{,**} rw,
+
+        @{PROC}/sys/net/ipv6/conf/all/disable_ipv6 r,
+  owner @{PROC}/@{pid}/cgroup r,
+  owner @{PROC}/@{pid}/mountinfo r,
+
+  /dev/ r,
+
+  include if exists <local/fractal>
+}
+
+# vim:syntax=apparmor

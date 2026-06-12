@@ -1,0 +1,22 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Roman Beslik <me@beroal.in.ua>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/v4l2-ctl
+@{att} = ""
+profile v4l2-ctl /{,usr/}bin/v4l2-ctl flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/camera>
+  include <abstractions/consoles>
+  include <abstractions/media-control>
+
+  @{exec_path} mr,
+
+  include if exists <local/v4l2-ctl>
+}
+
+# vim:syntax=apparmor

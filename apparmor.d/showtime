@@ -1,0 +1,36 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/showtime
+@{att} = /att/showtime/
+profile showtime /{,usr/}bin/showtime flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/audio-client>
+  include <abstractions/common/gnome>
+  include <abstractions/gstreamer>
+  include <abstractions/gvfs>
+  include <abstractions/mpris>
+  include <abstractions/python>
+
+  @{exec_path} mr,
+
+  @{open_path}       px -> child-open-help,
+
+  /usr/share/xml/iso-codes/{,**} r,
+
+  owner @{user_music_dirs}/{,**} rw,
+  owner @{user_pictures_dirs}/{,**} rw,
+  owner @{user_torrents_dirs}/{,**} rw,
+  owner @{user_videos_dirs}/{,**} rw,
+
+  owner @{PROC}/@{pid}/mounts r,
+
+  include if exists <local/showtime>
+}
+
+# vim:syntax=apparmor

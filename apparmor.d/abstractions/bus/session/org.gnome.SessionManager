@@ -1,0 +1,89 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+# Allow registering a client with the session manager. This is needed for
+# applications that want to be notified of session events, such as shutdown
+# or logout, and to be able to inhibit those actions.
+
+  abi <abi/4.0>,
+
+  #aa/dbus see bus=session name=org.gnome.SessionManager label="@{p_gnome_session}"
+
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label="@{p_gnome_session}"),
+
+  # DBus.Properties: read all properties from the interface
+
+  dbus send bus=session path=/org/gnome/SessionManager{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll}
+       peer=(name="{@{busname},org.gnome.SessionManager{,.*}}", label="@{p_gnome_session}"),
+
+  # DBus.Properties: receive property changed events
+
+  dbus receive bus=session path=/org/gnome/SessionManager{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member=PropertiesChanged
+       peer=(name="{@{busname},org.gnome.SessionManager{,.*}}", label="@{p_gnome_session}"),
+
+  # DBus.Introspectable: allow service introspection
+
+  dbus send bus=session path=/org/gnome/SessionManager{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gnome.SessionManager{,.*}}", label="@{p_gnome_session}"),
+
+  # SessionManager
+
+  dbus send bus=session path=/org/gnome/SessionManager
+       interface=org.gnome.SessionManager
+       member={RegisterClient,IsSessionRunning}
+       peer=(name="{@{busname},org.gnome.SessionManager}", label="@{p_gnome_session}"),
+
+  dbus receive bus=session path=/org/gnome/SessionManager
+       interface=org.gnome.SessionManager
+       member={ClientAdded,ClientRemoved}
+       peer=(name="{@{busname},org.gnome.SessionManager}", label="@{p_gnome_session}"),
+
+  dbus receive bus=session path=/org/gnome/SessionManager
+       interface=org.gnome.SessionManager
+       member={SessionRunning,SessionOver}
+       peer=(name="{@{busname},org.gnome.SessionManager}", label="@{p_gnome_session}"),
+
+  dbus receive bus=session path=/org/gnome/SessionManager
+       interface=org.gnome.SessionManager
+       member={InhibitorAdded,InhibitorRemoved}
+       peer=(name="{@{busname},org.gnome.SessionManager}", label="@{p_gnome_session}"),
+
+  dbus receive bus=session path=/org/gnome/SessionManager/Presence
+       interface=org.gnome.SessionManager.Presence
+       member=StatusChanged
+       peer=(name="{@{busname},org.gnome.SessionManager}", label="@{p_gnome_session}"),
+
+  dbus send bus=session path=/org/gnome/SessionManager/Client@{int}
+       interface=org.gnome.SessionManager.ClientPrivate
+       member=EndSessionResponse
+       peer=(name="{@{busname},org.gnome.SessionManager}", label="@{p_gnome_session}"),
+
+  dbus receive bus=session path=/org/gnome/SessionManager/Client@{int}
+       interface=org.gnome.SessionManager.ClientPrivate
+       member={CancelEndSession,QueryEndSession,EndSession,Stop}
+       peer=(name="{@{busname},org.gnome.SessionManager}", label="@{p_gnome_session}"),
+
+# ====================
+#
+# This one is not in this abs
+#   dbus send bus=session path=/org/gnome/SessionManager
+#        interface=org.gnome.SessionManager
+#        member={Inhibit,Uninhibit}
+#        peer=(name="@{busname}", label="@{p_gnome_session}"),
+#
+#   dbus send bus=session path=/org/gnome/SessionManager
+#        interface=org.gnome.SessionManager
+#        member=Setenv
+#        peer=(name=org.gnome.SessionManager, label="@{p_gnome_session}"),
+
+  include if exists <abstractions/bus/session/org.gnome.SessionManager.d>
+
+# vim:syntax=apparmor

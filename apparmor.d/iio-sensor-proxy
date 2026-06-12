@@ -1,0 +1,76 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/iio-sensor-proxy
+@{att} = /att/iio-sensor-proxy/
+profile iio-sensor-proxy /{,usr/}lib{,exec,32,64}/iio-sensor-proxy flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-system>
+  include <abstractions/bus/system/org.freedesktop.PolicyKit1>
+
+  capability net_admin,
+  capability sys_admin,
+
+  network netlink raw,
+
+  #aa/dbus own bus=system name=net.hadess.SensorProxy
+  include <abstractions/bus/system/own>
+  dbus bind bus=system name=net.hadess.SensorProxy{,.*},
+  dbus receive bus=system path=/net/hadess/SensorProxy{,/**}
+       interface=net.hadess.SensorProxy{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=system path=/net/hadess/SensorProxy{,/**}
+       interface=net.hadess.SensorProxy{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=system path=/net/hadess/SensorProxy{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=system path=/net/hadess/SensorProxy{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=system path=/net/hadess/SensorProxy{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},net.hadess.SensorProxy{,.*}}"),
+  dbus send bus=system path=/net/hadess/SensorProxy{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  @{exec_path} mr,
+
+  @{run}/udev/data/+acpi:* r,             # Exposes ACPI objects (power buttons, batteries, thermal)
+  @{run}/udev/data/+input:input@{int} r,  # for mouse, keyboard, touchpad
+  @{run}/udev/data/+platform:* r,         # Identifies onboard devices (laptop/board model, power controllers, thermal sensors)
+  @{run}/udev/data/+sound:card@{int} r,   # For sound card
+  @{run}/udev/data/c13:@{int}  r,         # For /dev/input/*
+  @{run}/udev/data/c@{dynamic}:@{int} r,  # For dynamic assignment range 234 to 254, 384 to 511
+
+  @{sys}/bus/ r,
+  @{sys}/bus/iio/devices/ r,
+  @{sys}/bus/platform/devices/ r,
+  @{sys}/class/ r,
+  @{sys}/class/input/ r,
+  @{sys}/devices/@{pci}/ r,
+  @{sys}/devices/@{pci}/iio:*/** rw,
+  @{sys}/devices/@{pci}/name r,
+  @{sys}/devices/**/input@{int}/capabilities/sw r,
+  @{sys}/devices/**/uevent r,
+
+  /dev/iio:* r,
+
+  include if exists <local/iio-sensor-proxy>
+}
+
+# vim:syntax=apparmor

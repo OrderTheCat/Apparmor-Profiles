@@ -1,0 +1,51 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{name} = {E,e}lement
+@{domain} = org.chromium.Chromium
+@{lib_dirs} = @{lib}/@{name}
+@{config_dirs} = @{user_config_dirs}/@{name}
+@{cache_dirs} = @{user_cache_dirs}/@{name}
+
+@{exec_path} = @{bin}/element-desktop
+@{att} = /att/element-desktop/
+profile element-desktop /{,usr/}bin/element-desktop flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/audio-client>
+  include <abstractions/bus/session/com.canonical.Unity.LauncherEntry>
+  include <abstractions/common/electron>
+  include <abstractions/p11-kit>
+  include <abstractions/screensaver>
+  include <abstractions/video>
+
+  network inet dgram,
+  network inet6 dgram,
+  network inet stream,
+  network inet6 stream,
+  network netlink raw,
+
+  @{exec_path} mr,
+
+  @{open_path}         rpx -> child-open-strict,
+
+  /usr/share/webapps/element/{,**} r,
+
+  /etc/webapps/element/{,**} r,
+
+  /dev/tty rw,
+
+  deny / r,
+  deny @{HOME}/ r,
+  deny @{user_share_dirs}/gvfs-metadata/* r,
+  deny /etc/machine-id r,
+  deny /var/lib/dbus/machine-id r,
+
+  include if exists <local/element-desktop>
+}
+
+# vim:syntax=apparmor

@@ -1,0 +1,85 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 odomingao
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/Hyprland
+@{att} = /att/hyprland/
+profile hyprland /{,usr/}bin/Hyprland flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/app-launcher-user>
+  include <abstractions/dconf-write>
+  include <abstractions/desktop>
+  include <abstractions/glfw>
+  include <abstractions/graphics>
+  include <abstractions/wine>
+
+  capability sys_ptrace,
+
+  network netlink raw,
+
+  signal send,
+  signal receive set=term peer=start-hyprland,
+
+  ptrace read,
+
+  @{exec_path} mr,
+
+  /usr/share/hypr{,land}/{,*} r,
+  /usr/share/libinput/{,*} r,
+  /usr/share/file/misc/magic.mgc r,
+
+  /etc/os-release r,
+
+  /var/cache/hyprpm/juan/split-monitor-workspaces/split-monitor-workspaces.so mr,
+
+  owner @{user_cache_dirs}/hyprland/{,**} rw,
+  owner @{user_config_dirs}/hypr/** r,
+  owner @{user_share_dirs}/hyprpm/** mr,
+  owner @{user_share_dirs}/hyprland/** rw,
+
+  owner @{run}/user/@{uid}/gamescope-* rw,
+  owner @{run}/user/@{uid}/.hyprpaper_* rw,
+  owner @{run}/user/@{uid}/.hyprpicker_* rw,
+  owner @{run}/user/@{uid}/hypr/{,**} rw,
+  owner @{att}/dev/shm/.org.chromium.Chromium.@{rand6} rw,
+  owner /dev/shm/.org.chromium.Chromium.@{rand6} rw,
+  owner /dev/shm/.com.google.Chrome.@{rand6} rw,
+
+  @{run}/systemd/sessions/@{int} r,
+
+  @{run}/udev/data/+acpi:* r,             # Exposes ACPI objects (power buttons, batteries, thermal)
+  @{run}/udev/data/+dmi:id r,             # for motherboard info
+  @{run}/udev/data/+drm:card@{int}-* r,   # For screen outputs
+  @{run}/udev/data/+hid:* r,              # For Human Interface Device (mice, controllers, drawing tablets, scanners)
+  @{run}/udev/data/+i2c:* r,              # For Inter-Integrated Circuit, low-speed peripherals (sensors, EEPROMs, etc.)
+  @{run}/udev/data/+input:input@{int} r,  # for mouse, keyboard, touchpad
+  @{run}/udev/data/+pci:* r,              # Identifies all PCI devices (CPU, GPU, Network, Disks, USB, etc.)
+  @{run}/udev/data/+platform:* r,         # Identifies onboard devices (laptop/board model, power controllers, thermal sensors)
+  @{run}/udev/data/+sound:card@{int} r,   # for sound card
+  @{run}/udev/data/+usb:* r,              # Identifies all USB devices
+  @{run}/udev/data/c13:@{int} r,          # for /dev/input/*
+  @{run}/udev/data/c189:@{int}  r,        # for /dev/bus/usb/**
+
+  @{sys}/bus/ r,
+  @{sys}/class/input/ r,
+  @{sys}/devices/@{pci}/boot_vga r,
+  @{sys}/devices/**/uevent r,
+
+  owner @{PROC}/@{pid}/environ r,
+
+  @{att}/dev/dri/card@{int} rw,
+  @{att}/dev/input/event@{int} rw,
+
+        /dev/input/event@{int} rw,
+        /dev/tty r,
+  owner /dev/tty@{u8} rw,
+
+  include if exists <local/hyprland>
+}
+
+# vim:syntax=apparmor
+

@@ -1,0 +1,40 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2018-2021 Mikhail Morfikov
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/xdg-email
+@{att} = /att/xdg-email/
+profile xdg-email /{,usr/}bin/xdg-email flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/common/xdg>
+  include <abstractions/mime>
+
+  @{exec_path}  r,
+
+  @{bin}/dbus-send            cx -> bus,
+  @{bin}/gdbus                cx -> bus,
+  @{bin}/kreadconfig{,5}      px,
+  @{bin}/xdg-mime             px,
+  @{bin}/xprop                px,
+
+  @{open_path}                px -> child-open-email,
+  @{thunderbird_path}         px,
+
+  profile bus flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/app/bus>
+    include <abstractions/bus-session>
+    include <abstractions/attached/consoles>
+
+    include if exists <local/xdg-email_bus>
+  }
+
+  include if exists <local/xdg-email>
+}
+
+# vim:syntax=apparmor

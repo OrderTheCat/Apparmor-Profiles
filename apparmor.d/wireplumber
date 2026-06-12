@@ -1,0 +1,157 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/wireplumber
+@{att} = /att/wireplumber/
+profile wireplumber /{,usr/}bin/wireplumber flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/audio-server>
+  include <abstractions/bluetooth-control>
+  include <abstractions/bus-session>
+  include <abstractions/bus-system>
+  include <abstractions/bus/session/org.freedesktop.impl.portal.PermissionStore>
+  include <abstractions/bus/system/org.freedesktop.RealtimeKit1>
+  include <abstractions/camera>
+  include <abstractions/devices-usb>
+  include <abstractions/media-control>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/sys/dmi>
+  include <abstractions/upower-observe>
+
+  capability sys_ptrace,
+
+  network bluetooth raw,
+  network bluetooth seqpacket,
+  network bluetooth stream,
+  network netlink raw,
+
+  ptrace read,
+
+  #aa/dbus own bus=session name=org.freedesktop.ReserveDevice1.Audio@{int}
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.freedesktop.ReserveDevice1.Audio@{int}{,.*},
+  dbus receive bus=session path=/org/freedesktop/ReserveDevice1/Audio@{int}{,/**}
+       interface=org.freedesktop.ReserveDevice1.Audio@{int}{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/freedesktop/ReserveDevice1/Audio@{int}{,/**}
+       interface=org.freedesktop.ReserveDevice1.Audio@{int}{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/freedesktop/ReserveDevice1/Audio@{int}{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/freedesktop/ReserveDevice1/Audio@{int}{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/freedesktop/ReserveDevice1/Audio@{int}{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.ReserveDevice1.Audio@{int}{,.*}}"),
+  dbus send bus=session path=/org/freedesktop/ReserveDevice1/Audio@{int}{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=session name=org.pipewire.Telephony
+  dbus bind bus=session name=org.pipewire.Telephony{,.*},
+  dbus receive bus=session path=/org/pipewire/Telephony{,/**}
+       interface=org.pipewire.Telephony{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/pipewire/Telephony{,/**}
+       interface=org.pipewire.Telephony{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/pipewire/Telephony{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/pipewire/Telephony{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/pipewire/Telephony{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.pipewire.Telephony{,.*}}"),
+  dbus send bus=session path=/org/pipewire/Telephony{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  dbus receive bus=session
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name=@{busname}, label="{gnome-shell,gnome-extension}"),
+
+  dbus receive bus=system path=/midi{,server@{int}}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name=@{busname}, label="@{p_bluetoothd}"),
+
+  @{exec_path} mr,
+
+  /opt/intel/oneapi/{compiler,lib,mkl}/**/ r,
+  /opt/intel/oneapi/{compiler,lib,mkl}/**.so* mr,
+
+  /usr/share/alsa-card-profile/{,**} r,
+  /usr/share/spa-*/bluez@{int}/{,*} r,
+  /usr/share/wireplumber/{,**} r,
+
+        / r,
+        /att/**/ r,
+  owner @{att}/.flatpak-info r,
+
+  owner @{desktop_local_dirs}/ w,
+  owner @{desktop_state_dirs}/ w,
+  owner @{desktop_state_dirs}/wireplumber/{,**} rw,
+
+  owner @{HOME}/.local/ w,
+  owner @{user_state_dirs}/ w,
+  owner @{user_state_dirs}/wireplumber/{,**} rw,
+  owner @{user_config_dirs}/wireplumber/{,**} r,
+
+  owner @{run}/user/@{uid}/pipewire-@{int} rw,
+  owner @{run}/user/@{uid}/pipewire-@{int}-manager rw,
+
+  @{run}/snapd.socket rw,
+
+  @{run}/systemd/users/@{uid} r,
+
+  @{run}/udev/data/c14:@{int} r,          # Open Sound System (OSS)
+  @{run}/udev/data/c116:@{int} r,         # For ALSA
+  @{run}/udev/data/c@{dynamic}:@{int} r,  # For dynamic assignment range 234 to 254, 384 to 511
+
+  @{sys}/bus/ r,
+  @{sys}/bus/media/devices/ r,
+  @{sys}/devices/**/device:*/{,**/}path r,
+  @{sys}/devices/**/sound/**/pcm_class r,
+  @{sys}/devices/**/sound/**/uevent r,
+  @{sys}/devices/**/uevent r,
+  @{sys}/devices/system/node/ r,
+  @{sys}/devices/system/node/node@{int}/meminfo r,
+
+        @{PROC}/@{pids}/ r,
+        @{PROC}/@{pids}/cgroup r,
+        @{PROC}/@{pids}/cmdline r,
+        @{PROC}/@{pids}/status r,
+  owner @{PROC}/@{pid}/stat r,
+  owner @{PROC}/@{pid}/task/@{tid}/comm rw,
+
+  /dev/udmabuf rw,
+
+  include if exists <local/wireplumber>
+}
+
+# vim:syntax=apparmor

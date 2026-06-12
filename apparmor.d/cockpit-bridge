@@ -1,0 +1,331 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/cockpit-bridge
+@{att} = /att/cockpit-bridge/
+profile cockpit-bridge /{,usr/}bin/cockpit-bridge flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-session>
+  include <abstractions/bus-system>
+  include <abstractions/bus/system/org.freedesktop.hostname1>
+  include <abstractions/bus/system/org.freedesktop.timedate1>
+  include <abstractions/bus/system/org.freedesktop.UDisks2>
+  include <abstractions/attached/consoles>
+  include <abstractions/icons>
+  include <abstractions/login-observe>
+  include <abstractions/mime>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/python>
+  include <abstractions/sys/hwmon-temp>
+
+  capability dac_read_search,
+  capability net_admin,
+  capability sys_nice,
+  capability sys_ptrace,
+
+  network inet dgram,
+  network inet stream,
+  network inet6 dgram,
+  network inet6 stream,
+  network netlink raw,
+
+  ptrace read,
+
+  unix (send receive) type=stream peer=(label=cockpit-askpass),
+
+  signal send set=term peer=cockpit-pcp,
+  signal send set=term peer=dbus-daemon,
+  signal send set=term peer=journalctl,
+  signal send set=term peer=ssh-agent,
+  signal send set=term peer=unconfined,
+  signal (send receive) set=term peer=cockpit-bridge//sudo,
+
+  #aa/dbus talk bus=session name=org.libvirt label=libvirt-dbus
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=libvirt-dbus),
+  # org.libvirt: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/libvirt{,/**}
+       interface=org.libvirt{,.*}
+       peer=(name="{@{busname},org.libvirt{,.*},org.freedesktop.DBus}", label=libvirt-dbus),
+  dbus send bus=session path=/org/libvirt{,/**}
+       interface=org.libvirt{,.*}
+       peer=(name="org.libvirt{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/libvirt{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.libvirt{,.*},org.freedesktop.DBus}", label=libvirt-dbus),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/libvirt{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.libvirt{,.*},org.freedesktop.DBus}", label=libvirt-dbus),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/libvirt{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.libvirt{,.*},org.freedesktop.DBus}", label=libvirt-dbus),
+  dbus receive bus=session path=/org/libvirt{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.libvirt{,.*},org.freedesktop.DBus}", label=libvirt-dbus),
+
+  #aa/dbus talk bus=system name=org.fedoraproject.FirewallD1 label=firewalld
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=firewalld),
+  # org.fedoraproject.FirewallD1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/fedoraproject/FirewallD1{,/**}
+       interface=org.fedoraproject.FirewallD1{,.*}
+       peer=(name="{@{busname},org.fedoraproject.FirewallD1{,.*},org.freedesktop.DBus}", label=firewalld),
+  dbus send bus=system path=/org/fedoraproject/FirewallD1{,/**}
+       interface=org.fedoraproject.FirewallD1{,.*}
+       peer=(name="org.fedoraproject.FirewallD1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/fedoraproject/FirewallD1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.fedoraproject.FirewallD1{,.*},org.freedesktop.DBus}", label=firewalld),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/fedoraproject/FirewallD1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.fedoraproject.FirewallD1{,.*},org.freedesktop.DBus}", label=firewalld),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/fedoraproject/FirewallD1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.fedoraproject.FirewallD1{,.*},org.freedesktop.DBus}", label=firewalld),
+  dbus receive bus=system path=/org/fedoraproject/FirewallD1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.fedoraproject.FirewallD1{,.*},org.freedesktop.DBus}", label=firewalld),
+
+  #aa/dbus talk bus=system name=org.freedesktop.NetworkManager label=NetworkManager
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=NetworkManager),
+  # org.freedesktop.NetworkManager: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/NetworkManager{,/**}
+       interface=org.freedesktop.NetworkManager{,.*}
+       peer=(name="{@{busname},org.freedesktop.NetworkManager{,.*},org.freedesktop.DBus}", label=NetworkManager),
+  dbus send bus=system path=/org/freedesktop/NetworkManager{,/**}
+       interface=org.freedesktop.NetworkManager{,.*}
+       peer=(name="org.freedesktop.NetworkManager{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/NetworkManager{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.NetworkManager{,.*},org.freedesktop.DBus}", label=NetworkManager),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/NetworkManager{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.NetworkManager{,.*},org.freedesktop.DBus}", label=NetworkManager),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/NetworkManager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.NetworkManager{,.*},org.freedesktop.DBus}", label=NetworkManager),
+  dbus receive bus=system path=/org/freedesktop/NetworkManager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.NetworkManager{,.*},org.freedesktop.DBus}", label=NetworkManager),
+
+  #aa/dbus talk bus=system name=org.freedesktop.PackageKit path=/** label=packagekitd
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=packagekitd),
+  # org.freedesktop.PackageKit: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/**
+       interface=org.freedesktop.PackageKit{,.*}
+       peer=(name="{@{busname},org.freedesktop.PackageKit{,.*},org.freedesktop.DBus}", label=packagekitd),
+  dbus send bus=system path=/**
+       interface=org.freedesktop.PackageKit{,.*}
+       peer=(name="org.freedesktop.PackageKit{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/**
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.PackageKit{,.*},org.freedesktop.DBus}", label=packagekitd),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/**
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.PackageKit{,.*},org.freedesktop.DBus}", label=packagekitd),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/**
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.PackageKit{,.*},org.freedesktop.DBus}", label=packagekitd),
+  dbus receive bus=system path=/**
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.PackageKit{,.*},org.freedesktop.DBus}", label=packagekitd),
+
+  #aa/dbus talk bus=system name=org.freedesktop.systemd1 label=@{p_systemd}
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=@{p_systemd}),
+  # org.freedesktop.systemd1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.systemd1{,.*}
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label=@{p_systemd}),
+  dbus send bus=system path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.systemd1{,.*}
+       peer=(name="org.freedesktop.systemd1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label=@{p_systemd}),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label=@{p_systemd}),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label=@{p_systemd}),
+  dbus receive bus=system path=/org/freedesktop/systemd1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.systemd1{,.*},org.freedesktop.DBus}", label=@{p_systemd}),
+
+  #aa/dbus talk bus=system name=org.libvirt label=libvirt-dbus
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=libvirt-dbus),
+  # org.libvirt: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/libvirt{,/**}
+       interface=org.libvirt{,.*}
+       peer=(name="{@{busname},org.libvirt{,.*},org.freedesktop.DBus}", label=libvirt-dbus),
+  dbus send bus=system path=/org/libvirt{,/**}
+       interface=org.libvirt{,.*}
+       peer=(name="org.libvirt{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/libvirt{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.libvirt{,.*},org.freedesktop.DBus}", label=libvirt-dbus),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/libvirt{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.libvirt{,.*},org.freedesktop.DBus}", label=libvirt-dbus),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/libvirt{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.libvirt{,.*},org.freedesktop.DBus}", label=libvirt-dbus),
+  dbus receive bus=system path=/org/libvirt{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.libvirt{,.*},org.freedesktop.DBus}", label=libvirt-dbus),
+
+
+  @{exec_path} mr,
+
+  @{python_path}              ix,
+  @{bin}/cat                  ix,
+  @{bin}/date                 ix,
+  @{bin}/file                 ix,
+  @{bin}/find                 ix,
+  @{bin}/ip                   ix,
+  @{bin}/test                 ix,
+
+  @{bin}/virt-xml            pux,
+  @{bin}/virt-xml-validate   pux,
+
+  @{bin}/chage                px,
+  @{sbin}/dmidecode           px,
+  @{bin}/findmnt              px,
+  @{bin}/journalctl           px,
+  @{bin}/last                 px,
+  @{bin}/lastlog              px,
+  @{bin}/lscpu                px,
+  @{bin}/passwd               px,
+  @{bin}/ssh-agent            px,
+  @{bin}/sudo                 cx -> sudo,
+  @{bin}/udevadm              cx -> udevadm,
+  @{bin}/virsh               rpux,
+  @{bin}/virt-install        pux, # TODO: rpx
+  @{lib}/cockpit/cockpit-pcp  px,
+  @{lib}/cockpit/cockpit-ssh  px,
+
+  # The shell is not confined on purpose.
+  @{bin}/@{shells}            ux,
+
+  /usr/{,local/}share/ r,
+  /usr/share/cockpit/{,**} r,
+  /usr/share/file/** r,
+  /usr/share/iproute2/* r,
+
+  @{etc_ro}/login.defs r,
+  /etc/cockpit/{,**} r,
+  /etc/machine-id r,
+  /etc/motd r,
+  /etc/shadow r,
+  /etc/shells r,
+
+  / r,
+  @{HOME}/ r,
+
+  audit owner @{user_cache_dirs}/ssh-agent.[0-9A-Z]* rw,
+  owner @{user_share_dirs}/ r,
+
+  audit @{run}/user/@{uid}/ssh-agent.[0-9A-Z]* rw,
+  @{run}/utmp r,
+
+  @{sys}/class/net/ r,
+  @{sys}/fs/cgroup/ r,
+  @{sys}/fs/cgroup/**/ r,
+  @{sys}/fs/cgroup/**/cpu.{stat,weight} r,
+  @{sys}/fs/cgroup/**/memory* r,
+  @{sys}/kernel/kexec_crash_size r,
+
+        @{PROC}/ r,
+        @{PROC}/@{pids}/cgroup r,
+        @{PROC}/@{pids}/io r,
+        @{PROC}/@{pids}/net/dev r,
+        @{PROC}/1/cgroup r,
+        @{PROC}/cmdline r,
+        @{PROC}/diskstats r,
+        @{PROC}/loadavg r,
+        @{PROC}/uptime r,
+  owner @{PROC}/@{pid}/cmdline r,
+  owner @{PROC}/@{pid}/fd/ r,
+  owner @{PROC}/@{pid}/mounts r,
+
+  /dev/ptmx rw,
+
+  profile sudo flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/app/sudo>
+
+    unix (send receive) type=stream peer=(label=cockpit-bridge),
+
+    signal (send receive) set=(cont hup term) peer=cockpit-bridge,
+
+    @{bin}/cockpit-bridge px,
+    @{lib}/cockpit/cockpit-askpass px,
+
+    include if exists <local/cockpit-bridge_sudo>
+  }
+
+  profile udevadm flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/app/udevadm>
+
+    @{run}/udev/data/b@{int}:* r,           # For block devices
+    @{run}/udev/data/n@{int} r,             # For network interfaces
+
+    include if exists <local/cockpit-bridge_udevadm>
+  }
+
+  include if exists <local/cockpit-bridge>
+}
+
+# vim:syntax=apparmor

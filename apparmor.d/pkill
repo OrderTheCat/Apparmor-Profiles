@@ -1,0 +1,24 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/pkill
+@{att} = ""
+profile pkill /{,usr/}bin/pkill flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/app/pgrep>
+
+  capability kill,
+
+  signal send,
+
+  @{exec_path} mr,
+
+  include if exists <local/pkill>
+}
+
+# vim:syntax=apparmor

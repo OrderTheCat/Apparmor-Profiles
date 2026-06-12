@@ -1,0 +1,110 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2020-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{name} = spotify
+@{domain} = org.chromium.Chromium
+@{lib_dirs} = /opt/@{name}/ /usr/share/@{name}/
+@{config_dirs} = @{user_config_dirs}/@{name}
+@{cache_dirs} = @{user_cache_dirs}/@{name}
+
+@{exec_path} = @{bin}/@{name} @{lib_dirs}/@{name}
+@{att} = /att/spotify/
+profile spotify /{{,usr/}bin/spotify,opt/spotify/spotify,usr/share/spotify/spotify} flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/audio-client>
+  include <abstractions/bluetooth-observe>
+  include <abstractions/bus-system>
+  include <abstractions/common/electron>
+  include <abstractions/devices-usb-read>
+  include <abstractions/ibus-strict>
+  include <abstractions/mediakeys>
+  include <abstractions/mpris>
+  include <abstractions/network-manager-observe>
+  include <abstractions/screen-inhibit>
+  include <abstractions/screensaver>
+  include <abstractions/secrets-service>
+  include <abstractions/upower-observe>
+
+  network inet dgram,
+  network inet6 dgram,
+  network inet stream,
+  network inet6 stream,
+  network netlink raw,
+
+  #aa/dbus talk bus=session name=org.freedesktop.portal.{d,D}esktop label=xdg-desktop-portal
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=xdg-desktop-portal),
+  # org.freedesktop.portal.{d,D}esktop: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/freedesktop/portal/{d,D}esktop{,/**}
+       interface=org.freedesktop.portal.{d,D}esktop{,.*}
+       peer=(name="{@{busname},org.freedesktop.portal.{d,D}esktop{,.*},org.freedesktop.DBus}", label=xdg-desktop-portal),
+  dbus send bus=session path=/org/freedesktop/portal/{d,D}esktop{,/**}
+       interface=org.freedesktop.portal.{d,D}esktop{,.*}
+       peer=(name="org.freedesktop.portal.{d,D}esktop{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/freedesktop/portal/{d,D}esktop{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.portal.{d,D}esktop{,.*},org.freedesktop.DBus}", label=xdg-desktop-portal),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/freedesktop/portal/{d,D}esktop{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.portal.{d,D}esktop{,.*},org.freedesktop.DBus}", label=xdg-desktop-portal),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/freedesktop/portal/{d,D}esktop{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.portal.{d,D}esktop{,.*},org.freedesktop.DBus}", label=xdg-desktop-portal),
+  dbus receive bus=session path=/org/freedesktop/portal/{d,D}esktop{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.portal.{d,D}esktop{,.*},org.freedesktop.DBus}", label=xdg-desktop-portal),
+
+
+  dbus send bus=session path=/org/freedesktop/portal/desktop
+       interface=org.freedesktop.portal.Secret
+       member=RetrieveSecret
+       peer=(name=org.freedesktop.portal.Desktop, label=xdg-desktop-portal),
+
+  @{exec_path} mrix,
+
+  @{sh_path} mr,
+
+  @{open_path}     rpx -> child-open-strict,
+
+  /usr/local/lib/spotify-adblock.so mr,
+
+  /etc/spotify-adblock/* r,
+
+  owner @{user_music_dirs}/{,**} r,
+
+  owner @{user_config_dirs}/spotify-adblock/* r,
+
+  owner @{cache_dirs}/WidevineCdm/**/libwidevinecdm.so rm,
+  owner @{config_dirs}/*/WidevineCdm/**/libwidevinecdm.so rm,
+
+  @{sys}/devices/@{pci_bus}/uevent r,
+
+        @{PROC}/@{pid}/net/unix r,
+  owner @{PROC}/@{pid}/clear_refs w,
+
+  /dev/tty rw,
+
+  deny dbus bus=session interface=org.freedesktop.systemd1.Manager,
+  deny dbus bus=system interface=org.freedesktop.login1.Manager,
+  deny owner @{HOME}/.tmp* rw,
+  deny /var/tmp/ r,
+  deny @{PROC}/pressure/* r,
+  deny /dev/bus/usb/** w,
+
+  include if exists <local/spotify>
+}
+
+# vim:syntax=apparmor

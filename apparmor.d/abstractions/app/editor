@@ -1,0 +1,40 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 Alexandre Pujol <alexandre@pujol.io>
+# Copyright (C) 2024 Zane Zakraisek <zz@eng.utah.edu>
+# SPDX-License-Identifier: GPL-2.0-only
+# LOGPROF-SUGGEST: no
+
+  abi <abi/4.0>,
+
+  include <abstractions/nameservice-strict>
+  include <abstractions/consoles>
+
+  @{sh_path}                  rix,
+  @{editor_path}             mrix,
+  @{bin}/which{,.debianutils} rix,
+
+  /usr/share/doc/{,**} r,
+  /usr/share/@{editor_names}/{,**} r,
+  /usr/share/terminfo/** r,
+
+  /etc/@{editor_names}/{,**} r,
+  /etc/@{editor_names}rc r,
+  /etc/xdg/@{editor_names}/* r,
+
+  owner @{HOME}/.selected_editor r,
+  owner @{HOME}/.vim/{after/,}spell/{,**} rw,
+  owner @{HOME}/.@{editor_names}/** r,
+  owner @{HOME}/.@{editor_names}{,.tmp} rw,
+  owner @{HOME}/.@{editor_names}rc r,
+
+  owner @{HOME}/ r,
+  owner @{user_cache_dirs}/ r,
+  owner @{user_cache_dirs}/@{editor_names}/{,**} rw,
+  owner @{user_config_dirs}/@{editor_names}/{,**} rw,
+  owner @{user_state_dirs}/@{editor_names}/{,**} rw,
+
+  owner @{run}/user/@{uid}/@{editor_names}.* rw,
+
+  include if exists <abstractions/app/editor.d>
+
+# vim:syntax=apparmor

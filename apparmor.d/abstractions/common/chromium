@@ -1,0 +1,73 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2022 Mikhail Morfikov
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+# NEEDS-VARIABLE: domain
+
+# This abstraction is for chromium based application. Chromium based browsers
+# need to use abstractions/app/chromium instead.
+#
+# It works as a *function* and requires a variable to be provided as *arguments*
+# and set in the header of the calling profile. Example:
+#
+# !!! quote ""
+#
+#     ```
+#     @{domain} = org.chromium.Chromium
+#     ```
+#
+
+  abi <abi/4.0>,
+
+  include <abstractions/nss>
+
+  userns,
+
+  # Required for dropping into PID namespace. Keep in mind that until the
+  # process drops this capability it can escape confinement, but once it
+  # drops CAP_SYS_ADMIN we are ok.
+  capability sys_admin,
+
+  capability sys_chroot,
+  capability sys_ptrace,
+
+  # Needed with sysctl_kernel_unprivileged_userns_clone = 1
+  audit capability setgid,
+  audit capability setuid,
+
+  owner @{user_share_dirs}/.@{domain}.@{rand6} rw,
+
+        @{tmp}/ r,
+  owner @{tmp}/{,.}@{domain}.@{rand6} rw,
+  owner @{tmp}/{,.}@{domain}.@{rand6}/ rw,
+  owner @{tmp}/{,.}@{domain}.@{rand6}/*.@{image_ext} rw,
+  owner @{tmp}/{,.}@{domain}.@{rand6}/SingletonCookie rw,
+  owner @{tmp}/{,.}@{domain}.@{rand6}/SingletonSocket rw,
+  owner @{tmp}/{,.}@{domain}.scoped_dir.@{rand6}/ rw,
+  owner @{tmp}/{,.}@{domain}.scoped_dir.@{rand6}/SingletonCookie rw,
+  owner @{tmp}/{,.}@{domain}.scoped_dir.@{rand6}/SingletonSocket rw,
+  owner @{tmp}/scoped_dir@{rand6}/ rw,
+  owner @{tmp}/scoped_dir@{rand6}/SingletonCookie rw,
+  owner @{tmp}/scoped_dir@{rand6}/SingletonSocket rw,
+  owner @{tmp}/scoped_dir@{rand6}/SS rw,
+
+        /dev/shm/ r,
+  owner /dev/shm/.@{domain}.@{rand6} rw,
+
+  @{sys}/devices/system/cpu/kernel_max r,
+
+  # Show the list of active tty
+  @{sys}/devices/virtual/tty/tty@{int}/active r,
+
+  # Allow getting the manufacturer and model of the computer where chromium is currently running.
+  @{sys}/devices/virtual/dmi/id/product_name r,
+  @{sys}/devices/virtual/dmi/id/sys_vendor r,
+
+  # Needed with sysctl_kernel_unprivileged_userns_clone = 1
+  owner @{PROC}/@{pid}/setgroups w,
+  owner @{PROC}/@{pid}/gid_map w,
+  owner @{PROC}/@{pid}/uid_map w,
+
+  include if exists <abstractions/common/chromium.d>
+
+# vim:syntax=apparmor

@@ -1,0 +1,42 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = /usr/share/libalpm/scripts/dkms
+@{att} = /att/pacman-hook-dkms/
+profile pacman-hook-dkms /usr/share/libalpm/scripts/dkms flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+
+  capability dac_read_search,
+  capability mknod,
+
+  network unix stream,
+
+  @{exec_path} mr,
+
+  @{sh_path}       rix,
+  @{bin}/{,e}grep  rix,
+  @{bin}/kmod       px,
+  @{bin}/nproc      px,
+  @{sbin}/dkms      px,
+
+  /usr/src/ r,
+  /usr/src/**.conf r,
+
+  /etc/dkms/{,*} r,
+
+  /dev/tty rw,
+
+  # Inherit Silencer
+  deny network inet stream,
+  deny network inet6 stream,
+
+  include if exists <local/pacman-hook-dkms>
+}
+
+# vim:syntax=apparmor

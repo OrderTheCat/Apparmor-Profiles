@@ -1,0 +1,25 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{sbin}/virtlockd
+@{att} = ""
+profile virtlockd /{,usr/}{,s}bin/virtlockd flags=(complain) {
+  include <abstractions/base-strict>
+
+  @{exec_path} mr,
+
+  /etc/libvirt/virtlockd.conf r,
+
+  @{run}/virtlockd.pid wk,
+
+  @{sys}/devices/system/node/ r,
+
+  include if exists <local/virtlockd>
+}
+
+# vim:syntax=apparmor

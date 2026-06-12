@@ -1,0 +1,51 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2022 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/atril/atrild
+@{att} = ""
+profile atrild /{,usr/}lib{,exec,32,64}/atril/atrild flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/bus-session>
+
+  #aa/dbus own bus=session name=org.mate.atril.Daemon
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.mate.atril.Daemon{,.*},
+  dbus receive bus=session path=/org/mate/atril/Daemon{,/**}
+       interface=org.mate.atril.Daemon{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/mate/atril/Daemon{,/**}
+       interface=org.mate.atril.Daemon{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/mate/atril/Daemon{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/mate/atril/Daemon{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/mate/atril/Daemon{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.mate.atril.Daemon{,.*}}"),
+  dbus send bus=session path=/org/mate/atril/Daemon{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  @{exec_path} mr,
+
+  include if exists <local/atrild>
+}
+
+# vim:syntax=apparmor

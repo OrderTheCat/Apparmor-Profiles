@@ -1,0 +1,53 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2018-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+# Generic profile for exo utility. It is an equivalent of child-open-any.
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/@{multiarch}/xfce[0-9]/exo-[0-9]/exo-helper-[0-9]
+@{att} = ""
+profile exo-helper /{,usr/}lib{,exec,32,64}/*-linux-gnu*/xfce[0-9]/exo-[0-9]/exo-helper-[0-9] flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/app-launcher-user>
+  include <abstractions/app/open>
+  include <abstractions/path>
+
+  @{exec_path} mr,
+
+  /usr/share/ r,
+  /usr/share/xfce4/ r,
+  /usr/share/xfce4/helpers/ r,
+  /usr/share/xfce4/helpers/*.desktop r,
+  /usr/local/share/ r,
+
+  /etc/xdg/{,xdg-*/}xfce4/helpers.rc r,
+
+  /etc/fstab r,
+
+  owner @{user_share_dirs}/ r,
+  owner @{user_share_dirs}/xfce4/ r,
+  owner @{user_share_dirs}/xfce4/helpers/ r,
+
+  owner @{user_config_dirs}/xfce4/helpers.rc rw,
+  owner @{user_config_dirs}/xfce4/helpers.rc.@{pid}.tmp rw,
+  owner @{user_share_dirs}/xfce4/helpers/*.desktop rw,
+  owner @{user_share_dirs}/xfce4/helpers/*.desktop.@{pid}.tmp rw,
+
+  owner @{user_config_dirs}/mimeapps.list{,.@{rand6}} rw,
+
+  owner @{PROC}/@{pid}/fd/ r,
+  owner @{PROC}/@{pid}/mountinfo r,
+  owner @{PROC}/@{pid}/mounts r,
+
+  # file_inherit
+  owner /dev/tty@{u8} rw,
+
+  include if exists <local/exo-helper>
+}
+
+# vim:syntax=apparmor

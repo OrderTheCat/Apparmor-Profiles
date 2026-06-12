@@ -1,0 +1,41 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021 Mikhail Morfikov
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/{,gvfs/}gvfsd-admin
+@{att} = ""
+profile gvfsd-admin /{,usr/}lib{,exec,32,64}/{,gvfs/}gvfsd-admin flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/bus-session>
+  include <abstractions/bus/system/org.freedesktop.PolicyKit1>
+  include <abstractions/gvfs-backend>
+  include <abstractions/mime>
+  include <abstractions/nameservice-strict>
+
+  capability chown,
+  capability dac_override,
+  capability dac_read_search,
+  capability fowner,
+  capability setuid,
+
+  @{exec_path} mr,
+
+  #aa:lint ignore=too-wide
+  # Full access to system's data, but no write access to sensitive system directories
+  / r,
+  /*/ r,
+  /*/** rw,
+  deny @{sys}/** w,
+  deny @{PROC}/** w,
+  deny @{efi}/** w,
+  deny /dev/** w,
+
+  include if exists <local/gvfsd-admin>
+}
+
+# vim:syntax=apparmor

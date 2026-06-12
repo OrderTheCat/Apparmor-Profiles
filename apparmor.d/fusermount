@@ -1,0 +1,51 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2020-2022 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/fusermount{,3}
+@{att} = /att/fusermount/
+profile fusermount /{,usr/}bin/fusermount{,3} flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/app/fusermount>
+
+  capability setuid,
+
+  # Be able to mount ISO images
+  mount fstype={fuse,fuse.*} -> @{HOME}/**/,
+  mount fstype={fuse,fuse.*} -> @{MOUNTS}/**/,
+  mount fstype={fuse,fuse.*} -> @{run}/user/@{uid}/*/,
+  mount fstype={fuse,fuse.*} -> /var/tmp/flatpak-cache-*/*/,
+  mount fstype={fuse,fuse.*} -> /tmp/.mount_*@{rand6}/,
+
+  umount @{HOME}/**/,
+  umount @{MOUNTS}/**/,
+  umount /tmp/.mount_*/,
+  umount @{run}/user/@{uid}/*/,
+  umount /var/tmp/flatpak-cache-*/*/,
+  umount /tmp/fsa/*/, # fsarchiver
+
+  unix (send receive) type=stream peer=(label=fuse-overlayfs),
+
+  @{exec_path} mr,
+
+  /etc/machine-id r,
+
+  /var/tmp/flatpak-cache-*/*/ r,
+
+  # Where to mount ISO files
+  owner @{HOME}/**/ rw,
+  owner @{MOUNTS}/**/ rw,
+
+  /tmp/.mount_*@{rand6}/ r,
+
+  @{run}/user/@{uid}/doc/ r,
+
+  include if exists <local/fusermount>
+}
+
+# vim:syntax=apparmor

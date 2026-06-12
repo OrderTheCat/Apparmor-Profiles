@@ -1,0 +1,38 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/systemd/systemd-binfmt
+@{att} = /att/systemd-binfmt/
+profile systemd-binfmt /{,usr/}lib{,exec,32,64}/systemd/systemd-binfmt flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/common/systemd>
+
+  capability net_admin,
+
+  ptrace read peer=@{p_systemd},
+
+  @{exec_path} mr,
+
+  @{bin}/* r,
+  @{sbin}/* r,
+
+  # Config file locations
+  /etc/binfmt.d/{,*.conf} r,
+  @{run}/binfmt.d/{,*.conf} r,
+  @{lib}/binfmt.d/{,*.conf} r,
+
+  @{PROC}/sys/fs/binfmt_misc/register w,
+  @{PROC}/sys/fs/binfmt_misc/status w,
+
+  /dev/tty@{u8} rw,
+  /dev/pts/@{u16} rw,
+
+  include if exists <local/systemd-binfmt>
+}
+
+# vim:syntax=apparmor

@@ -1,0 +1,105 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/extension-manager
+@{att} = /att/gnome-extension-manager/
+profile gnome-extension-manager /{,usr/}bin/extension-manager flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/dconf-write>
+  include <abstractions/gnome-strict>
+  include <abstractions/graphics>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/network-manager-observe>
+  include <abstractions/p11-kit>
+  include <abstractions/ssl_certs>
+
+  network inet dgram,
+  network inet6 dgram,
+  network inet stream,
+  network inet6 stream,
+  network netlink raw,
+
+  #aa/dbus own bus=session name=com.mattjakeman.ExtensionManager
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=com.mattjakeman.ExtensionManager{,.*},
+  dbus receive bus=session path=/com/mattjakeman/ExtensionManager{,/**}
+       interface=com.mattjakeman.ExtensionManager{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/com/mattjakeman/ExtensionManager{,/**}
+       interface=com.mattjakeman.ExtensionManager{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/com/mattjakeman/ExtensionManager{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/com/mattjakeman/ExtensionManager{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/com/mattjakeman/ExtensionManager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},com.mattjakeman.ExtensionManager{,.*}}"),
+  dbus send bus=session path=/com/mattjakeman/ExtensionManager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus talk bus=session name=org.gnome.Shell.Extensions label=gjs
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=gjs),
+  # org.gnome.Shell.Extensions: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/gnome/Shell/Extensions{,/**}
+       interface=org.gnome.Shell.Extensions{,.*}
+       peer=(name="{@{busname},org.gnome.Shell.Extensions{,.*},org.freedesktop.DBus}", label=gjs),
+  dbus send bus=session path=/org/gnome/Shell/Extensions{,/**}
+       interface=org.gnome.Shell.Extensions{,.*}
+       peer=(name="org.gnome.Shell.Extensions{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/gnome/Shell/Extensions{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gnome.Shell.Extensions{,.*},org.freedesktop.DBus}", label=gjs),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/gnome/Shell/Extensions{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gnome.Shell.Extensions{,.*},org.freedesktop.DBus}", label=gjs),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/gnome/Shell/Extensions{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.Shell.Extensions{,.*},org.freedesktop.DBus}", label=gjs),
+  dbus receive bus=session path=/org/gnome/Shell/Extensions{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gnome.Shell.Extensions{,.*},org.freedesktop.DBus}", label=gjs),
+
+
+  @{exec_path} mr,
+
+  @{bin}/gjs-console rix,
+
+  @{open_path}  rpx -> child-open-help,
+
+  /usr/share/gnome-shell/org.gnome.Shell.Extensions r,
+
+        @{PROC}/sys/net/ipv6/conf/all/disable_ipv6 r,
+  owner @{PROC}/@{pid}/cmdline r,
+  owner @{PROC}/@{pid}/task/@{tid}/comm rw,
+
+  # Silencer
+  deny owner @{user_share_dirs}/gvfs-metadata/{,*} r,
+
+  include if exists <local/gnome-extension-manager>
+}
+
+# vim:syntax=apparmor

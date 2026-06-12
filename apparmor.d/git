@@ -1,0 +1,171 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2020-2022 Mikhail Morfikov
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{lib_dirs} = @{lib}/git/ @{lib}/git-core/
+@{code_config_dirs} = @{user_config_dirs}/Code* @{HOME}/.vscode{,-oss}
+
+@{exec_path}  = @{bin}/git @{bin}/git-*
+@{exec_path} += @{lib_dirs}/git @{lib_dirs}/git-* @{lib_dirs}/mergetools/*
+@{att} = /att/git/
+profile git /{{,usr/}bin/git,{,usr/}bin/git-*,{,usr/}lib{,exec,32,64}/git/git,{,usr/}lib{,exec,32,64}/git-core/git,{,usr/}lib{,exec,32,64}/git/git-*,{,usr/}lib{,exec,32,64}/git-core/git-*,{,usr/}lib{,exec,32,64}/git/mergetools/*,{,usr/}lib{,exec,32,64}/git-core/mergetools/*,{,usr/}lib{,exec,32,64}/git/git,{,usr/}lib{,exec,32,64}/git-core/git,{,usr/}lib{,exec,32,64}/git/git-*,{,usr/}lib{,exec,32,64}/git-core/git-*,{,usr/}lib{,exec,32,64}/git/mergetools/*,{,usr/}lib{,exec,32,64}/git-core/mergetools/*} flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/app/git>
+
+  signal send peer=aurpublish,
+  signal receive set=term peer=code,
+
+  # unix (send receive) type=stream peer=(label=claude),
+  unix (send receive) type=stream peer=(label=code),
+  unix type=seqpacket peer=(label=code-shells),
+  unix type=seqpacket peer=(label=code),
+
+  @{exec_path} mrix,
+
+  @{pager_path}      px -> child-pager,
+
+  @{bin}/gh          px,
+  @{bin}/man         px,
+  @{bin}/meld       pux,
+  @{lib}/code/extensions/git/dist/askpass.sh     px,
+  @{lib}/code/extensions/git/dist/git-editor.sh  px,
+  /usr/share/aurpublish/*.hook                   px,
+
+  @{editor_path}         cx -> editor,
+
+  # TODO: revisit the stacking. Profile with nnp flag that use git should
+  # not use this git profile but a more specific one.
+  @{bin}/gpg{,2}         cx -> &gpg,
+  @{bin}/ssh            rcx -> &ssh,
+  @{bin}/ssh.hmac         r,
+
+  /usr/share/libalternatives/{,**} r,
+  /usr/share/terminfo/** r,
+
+  /etc/mailname r,
+  @{etc_ro}/ssh/ssh_config r,
+  @{etc_ro}/ssh/ssh_config.d/{,*} r,
+
+  / r,
+
+  owner @{user_projects_dirs}/   rw,
+  owner @{user_projects_dirs}/** rwkl -> @{user_projects_dirs}/**,
+  owner @{user_projects_dirs}/**/.git/hooks/* rix,
+
+  owner @{user_cache_dirs}/*/ rw,
+  owner @{user_cache_dirs}/*/** rwkl -> @{user_cache_dirs}/*/**,
+
+  owner @{HOME}/.gitconfig* rw,
+  owner @{HOME}/.netrc r,
+  owner @{user_config_dirs}/git/{,*} rw,
+
+  owner @{HOME}/.ansible/tmp{,**} rwlk,
+
+  # GPG / SSH
+  owner @{HOME}/@{XDG_SSH_DIR}/ rw,
+  owner @{HOME}/@{XDG_SSH_DIR}/** rwl -> @{HOME}/@{XDG_SSH_DIR}/**,
+  owner @{run}/user/@{uid}/keyring/ssh rw,
+  owner @{HOME}/@{XDG_GPG_DIR}/ rw,
+  owner @{HOME}/@{XDG_GPG_DIR}/** rwkl -> @{HOME}/@{XDG_GPG_DIR}/**,
+  owner @{tmp}/.git_vtag_tmp@{rand6} r,
+  owner @{run}/user/@{uid}/gnupg/S.gpg-agent rw,
+
+  owner @{run}/user/@{uid}/gcr/ssh rw,
+
+  # file_inherit
+  deny /usr/share/code/{,**} r,
+  deny owner @{code_config_dirs}/** rw,
+  deny owner @{user_share_dirs}/gvfs-metadata/* r,
+  deny owner @{user_share_dirs}/vulkan/** r,
+  deny owner @{user_share_dirs}/zed/**/data.mdb rw,
+  deny /usr/share/nvidia/nvidia-application-profiles-* r,
+  deny /dev/shm/.org.chromium.Chromium.@{rand6} rw,
+
+  profile gpg flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/attached/consoles>
+
+    @{bin}/gpg{,2}     mr,
+    @{bin}/gpg-agent  rpx,
+
+    owner @{HOME}/@{XDG_GPG_DIR}/ rw,
+    owner @{HOME}/@{XDG_GPG_DIR}/** rwkl -> @{HOME}/@{XDG_GPG_DIR}/**,
+
+    owner @{tmp}/.git_vtag_tmp@{rand6} r,
+
+    owner @{run}/user/@{uid}/gnupg/S.gpg-agent rw,
+
+    deny @{user_share_dirs}/gvfs-metadata/* r,
+
+    include if exists <local/git_gpg>
+  }
+
+  profile ssh flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/attached/consoles>
+    include <abstractions/attached/nameservice-strict>
+
+    network inet dgram,
+    network inet6 dgram,
+    network inet stream,
+    network inet6 stream,
+    network netlink raw,
+
+    @{bin}/ssh mr,
+    @{bin}/ssh.hmac r,
+
+    @{bin}/ksshaskpass ix,
+    @{lib}/code/extensions/git/dist/ssh-askpass.sh px,
+
+    @{etc_ro}/ssh/ssh_config.d/{,*} r,
+    @{etc_ro}/ssh/ssh_config r,
+
+    owner @{HOME}/@{XDG_SSH_DIR}/{,*} r,
+    owner @{HOME}/@{XDG_SSH_DIR}/known_hosts.old rwl,
+    owner @{HOME}/@{XDG_SSH_DIR}/known_hosts{,.*} rw,
+    owner @{HOME}/@{XDG_SSH_DIR}/ssh_control_* rwl,
+
+    owner @{tmp}/git@*:@{int} rwl -> @{tmp}/git@*:@{int}.*,
+    owner @{tmp}/ssh-*/agent.@{int} rw,
+    owner @{run}/user/@{uid}/keyring/ssh rw,
+    owner @{run}/user/@{uid}/gcr/ssh rw,
+
+    owner @{PROC}/@{pid}/fd/ r,
+
+    deny @{user_share_dirs}/gvfs-metadata/* r,
+
+    include if exists <local/git_ssh>
+  }
+
+  profile exec flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+
+    owner @{user_build_dirs}/**/bin/* mr,
+
+    include if exists <local/git_exec>
+  }
+
+  profile editor flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/app/editor>
+
+    owner @{user_projects_dirs}/**/ r,
+    owner @{user_projects_dirs}/**/.git/@{int} rw,
+    owner @{user_projects_dirs}/**/.git/*MSG rw,
+
+    # The git repository files
+    owner @{user_build_dirs}/ r,
+    owner @{user_build_dirs}/** rw,
+
+    include if exists <local/git_editor>
+  }
+
+  include if exists <local/git>
+}
+
+# vim:syntax=apparmor

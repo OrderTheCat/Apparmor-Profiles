@@ -1,0 +1,101 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/resolvectl
+@{att} = /att/resolvectl/
+profile resolvectl /{,usr/}bin/resolvectl flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-system>
+  include <abstractions/common/systemd>
+  include <abstractions/attached/consoles>
+
+  capability net_admin,
+
+  network inet raw,
+  network inet stream,
+  network inet6 raw,
+  network inet6 stream,
+  network netlink raw,
+
+  signal send set=cont peer=child-pager,
+
+  unix bind type=stream addr=@@{udbus}/bus/resolvconf/system,
+
+  #aa/dbus talk bus=system name=org.freedesktop.resolve1 label="@{p_systemd_resolved}"
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label="@{p_systemd_resolved}"),
+  # org.freedesktop.resolve1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/resolve1{,/**}
+       interface=org.freedesktop.resolve1{,.*}
+       peer=(name="{@{busname},org.freedesktop.resolve1{,.*},org.freedesktop.DBus}", label="@{p_systemd_resolved}"),
+  dbus send bus=system path=/org/freedesktop/resolve1{,/**}
+       interface=org.freedesktop.resolve1{,.*}
+       peer=(name="org.freedesktop.resolve1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/resolve1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.resolve1{,.*},org.freedesktop.DBus}", label="@{p_systemd_resolved}"),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/resolve1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.resolve1{,.*},org.freedesktop.DBus}", label="@{p_systemd_resolved}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/resolve1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.resolve1{,.*},org.freedesktop.DBus}", label="@{p_systemd_resolved}"),
+  dbus receive bus=system path=/org/freedesktop/resolve1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.resolve1{,.*},org.freedesktop.DBus}", label="@{p_systemd_resolved}"),
+
+
+  #aa/dbus talk bus=system name=org.freedesktop.network1 label="@{p_systemd_networkd}"
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label="@{p_systemd_networkd}"),
+  # org.freedesktop.network1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/network1{,/**}
+       interface=org.freedesktop.network1{,.*}
+       peer=(name="{@{busname},org.freedesktop.network1{,.*},org.freedesktop.DBus}", label="@{p_systemd_networkd}"),
+  dbus send bus=system path=/org/freedesktop/network1{,/**}
+       interface=org.freedesktop.network1{,.*}
+       peer=(name="org.freedesktop.network1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/network1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.network1{,.*},org.freedesktop.DBus}", label="@{p_systemd_networkd}"),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/network1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.network1{,.*},org.freedesktop.DBus}", label="@{p_systemd_networkd}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/network1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.network1{,.*},org.freedesktop.DBus}", label="@{p_systemd_networkd}"),
+  dbus receive bus=system path=/org/freedesktop/network1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.network1{,.*},org.freedesktop.DBus}", label="@{p_systemd_networkd}"),
+
+  dbus send bus=system path=/org/freedesktop/network1
+       interface=org.freedesktop.network1.Manager
+       peer=(name=org.freedesktop.network1),
+
+  @{exec_path} mr,
+
+  @{pager_path} rpx -> child-pager,
+
+  include if exists <local/resolvectl>
+}
+
+# vim:syntax=apparmor

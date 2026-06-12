@@ -1,0 +1,36 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2018-2021 Mikhail Morfikov
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/systemd/systemd-backlight
+@{att} = /att/systemd-backlight/
+profile systemd-backlight /{,usr/}lib{,exec,32,64}/systemd/systemd-backlight flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/backlight>
+  include <abstractions/common/systemd>
+
+  ptrace read peer=@{p_systemd},
+
+  capability net_admin,
+
+  @{exec_path} mr,
+
+  /var/lib/systemd/backlight/*backlight* rw,
+
+  @{run}/udev/data/+pci:* r,              # Identifies all PCI devices (CPU, GPU, Network, Disks, USB, etc.)
+
+  @{sys}/bus/ r,
+  @{sys}/bus/pci/devices/ r,
+
+  @{sys}/devices/@{pci}/ r,
+  @{sys}/devices/@{pci}/class r,
+
+  include if exists <local/systemd-backlight>
+}
+
+# vim:syntax=apparmor

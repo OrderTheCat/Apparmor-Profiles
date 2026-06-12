@@ -1,0 +1,409 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/kwin_wayland
+@{att} = /att/kwin_wayland/
+profile kwin_wayland /{,usr/}bin/kwin_wayland flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+  include <abstractions/attached/base>
+  include <abstractions/app-launcher-user>
+  include <abstractions/bus-session>
+  include <abstractions/bus/system/org.freedesktop.locale1>
+  include <abstractions/fontconfig-cache-write>
+  include <abstractions/graphics>
+  include <abstractions/kde-strict>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/qt5-shader-cache>
+  include <abstractions/sys/dmi>
+
+  # See https://community.kde.org/Distributions/Packaging_Recommendations#KWin_package_configuration
+  capability sys_nice,
+
+  capability sys_ptrace,
+
+  network netlink raw,
+
+  ptrace read,
+
+  signal receive set=term peer=sddm,
+  signal receive set=(kill, term) peer=kwin_wayland_wrapper,
+  signal send set=(kill, term) peer=xwayland,
+  signal send set=term peer=unconfined,
+  signal send set=term peer=plasma-keyboard,
+
+  unix type=stream peer=(label=xkbcomp),
+  unix type=stream peer=(label=xwayland),
+
+  #aa/dbus own bus=session name=org.freedesktop.ScreenSaver
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.freedesktop.ScreenSaver{,.*},
+  dbus receive bus=session path=/org/freedesktop/ScreenSaver{,/**}
+       interface=org.freedesktop.ScreenSaver{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/freedesktop/ScreenSaver{,/**}
+       interface=org.freedesktop.ScreenSaver{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/freedesktop/ScreenSaver{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/freedesktop/ScreenSaver{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/freedesktop/ScreenSaver{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.ScreenSaver{,.*}}"),
+  dbus send bus=session path=/org/freedesktop/ScreenSaver{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=session name=org.kde.kglobalaccel path=/kglobalaccel
+  dbus bind bus=session name=org.kde.kglobalaccel{,.*},
+  dbus receive bus=session path=/kglobalaccel
+       interface=org.kde.kglobalaccel{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/kglobalaccel
+       interface=org.kde.kglobalaccel{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/kglobalaccel
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/kglobalaccel
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/kglobalaccel
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.kde.kglobalaccel{,.*}}"),
+  dbus send bus=session path=/kglobalaccel
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=session name=org.kde.KWin
+  dbus bind bus=session name=org.kde.KWin{,.*},
+  dbus receive bus=session path=/org/kde/KWin{,/**}
+       interface=org.kde.KWin{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/kde/KWin{,/**}
+       interface=org.kde.KWin{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/kde/KWin{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/kde/KWin{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/kde/KWin{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.kde.KWin{,.*}}"),
+  dbus send bus=session path=/org/kde/KWin{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=session name=org.kde.NightColor path=/ColorCorrect
+  dbus bind bus=session name=org.kde.NightColor{,.*},
+  dbus receive bus=session path=/ColorCorrect
+       interface=org.kde.NightColor{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/ColorCorrect
+       interface=org.kde.NightColor{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/ColorCorrect
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/ColorCorrect
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/ColorCorrect
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.kde.NightColor{,.*}}"),
+  dbus send bus=session path=/ColorCorrect
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=session name=org.kde.screensaver
+  dbus bind bus=session name=org.kde.screensaver{,.*},
+  dbus receive bus=session path=/org/kde/screensaver{,/**}
+       interface=org.kde.screensaver{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/kde/screensaver{,/**}
+       interface=org.kde.screensaver{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/kde/screensaver{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/kde/screensaver{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/kde/screensaver{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.kde.screensaver{,.*}}"),
+  dbus send bus=session path=/org/kde/screensaver{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  #aa/dbus talk bus=system name=org.freedesktop.login1 label=systemd-logind
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=systemd-logind),
+  # org.freedesktop.login1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.login1{,.*}
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label=systemd-logind),
+  dbus send bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.login1{,.*}
+       peer=(name="org.freedesktop.login1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label=systemd-logind),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label=systemd-logind),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label=systemd-logind),
+  dbus receive bus=system path=/org/freedesktop/login1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.login1{,.*},org.freedesktop.DBus}", label=systemd-logind),
+
+  #aa/dbus talk bus=session name=org.kde.ActivityManager path=/ActivityManager label=kactivitymanagerd
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=kactivitymanagerd),
+  # org.kde.ActivityManager: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/ActivityManager
+       interface=org.kde.ActivityManager{,.*}
+       peer=(name="{@{busname},org.kde.ActivityManager{,.*},org.freedesktop.DBus}", label=kactivitymanagerd),
+  dbus send bus=session path=/ActivityManager
+       interface=org.kde.ActivityManager{,.*}
+       peer=(name="org.kde.ActivityManager{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/ActivityManager
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.kde.ActivityManager{,.*},org.freedesktop.DBus}", label=kactivitymanagerd),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/ActivityManager
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.kde.ActivityManager{,.*},org.freedesktop.DBus}", label=kactivitymanagerd),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/ActivityManager
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.kde.ActivityManager{,.*},org.freedesktop.DBus}", label=kactivitymanagerd),
+  dbus receive bus=session path=/ActivityManager
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.kde.ActivityManager{,.*},org.freedesktop.DBus}", label=kactivitymanagerd),
+
+
+  @{exec_path} mr,
+
+  /etc/xdg/Xwayland-session.d/00-at-spi cx -> at-spi,
+  /etc/xdg/Xwayland-session.d/00-pulseaudio-x11 cx -> pulseaudio,
+  /etc/xdg/Xwayland-session.d/10-ibus-x11 cx -> ibus,
+  /{,usr/}lib{,exec,32,64}/*-linux-gnu*/{,libexec/}kscreenlocker_greet Px,
+  /{,usr/}lib{,exec,32,64}/kscreenlocker_greet Px,
+
+  /usr/share/color-schemes/*.colors r,
+  /usr/share/desktop-directories/*.directory r,
+  /usr/share/kglobalaccel/{,**} r,
+  /usr/share/kservices{5,6}/{,**} r,
+  /usr/share/kservicetypes5/{,*.desktop} r,
+  /usr/share/kwin-wayland/{,**} r,
+  /usr/share/kwin/{,**} r,
+  /usr/share/libinput-*/{,**} r,
+  /usr/share/libinput/{,**} r,
+  /usr/share/pipewire/client.conf r,
+  /usr/share/plasma/desktoptheme/** r,
+
+  /etc/pipewire/client.conf.d/ r,
+  /etc/xdg/** r,
+
+  / r,
+  owner @{HOME}/ r,
+
+  owner @{sddm_cache_dirs}/#@{int} rwk,
+  owner @{sddm_cache_dirs}/ksycoca{5,6}_* rwkl  -> @{sddm_cache_dirs}/#@{int},
+  owner @{sddm_cache_dirs}/kwin/ rw,
+  owner @{sddm_cache_dirs}/kwin/** rwlk,
+
+  owner @{sddm_config_dirs}/#@{int} rw,
+  owner @{sddm_config_dirs}/kcminputrc r,
+  owner @{sddm_config_dirs}/kdedefaults/* r,
+  owner @{sddm_config_dirs}/kdeglobals r,
+  owner @{sddm_config_dirs}/kglobalshortcutsrc.lock rwk,
+  owner @{sddm_config_dirs}/kglobalshortcutsrc{,.@{rand6}} rwl,
+  owner @{sddm_config_dirs}/kwinoutputconfig.json rw,
+  owner @{sddm_config_dirs}/kwinrc.lock rwk,
+  owner @{sddm_config_dirs}/kwinrc{,.@{rand6}} rwl,
+
+  owner @{user_cache_dirs}/ r,
+  owner @{user_cache_dirs}/ksvg-elements r,
+  owner @{user_cache_dirs}/kwin/ rw,
+  owner @{user_cache_dirs}/kwin/** rwkl -> @{user_cache_dirs}/kwin/**,
+  owner @{user_cache_dirs}/plasma_theme_*.kcache rw,
+  owner @{user_cache_dirs}/plasma-svgelements rw,
+  owner @{user_cache_dirs}/plasma-svgelements.@{rand6} rwl -> @{user_cache_dirs}/#@{int},
+  owner @{user_cache_dirs}/plasma-svgelements.lock rwk,
+
+  owner @{user_config_dirs}/#@{int} rwl,
+  owner @{user_config_dirs}/breezerc r,
+  owner @{user_config_dirs}/kdedefaults/* r,
+  owner @{user_config_dirs}/kglobalshortcutsrc.lock rwk,
+  owner @{user_config_dirs}/kglobalshortcutsrc{,.@{rand6}} rwl,
+  owner @{user_config_dirs}/khotkeysrc r,
+  owner @{user_config_dirs}/klaunchrc r,
+  owner @{user_config_dirs}/kscreenlockerrc r,
+  owner @{user_config_dirs}/kwinoutputconfig.json rw,
+  owner @{user_config_dirs}/kwinrc.lock rwk,
+  owner @{user_config_dirs}/kwinrc{,.@{rand6}} rwl,
+  owner @{user_config_dirs}/kwinrulesrc r,
+  owner @{user_config_dirs}/kxkbrc r,
+  owner @{user_config_dirs}/menus/** r,
+  owner @{user_config_dirs}/plasmarc r,
+  owner @{user_config_dirs}/session/* r,
+  owner @{user_config_dirs}/breezerc w,
+  owner @{user_config_dirs}/breezerc.@{rand6} rw,
+  owner @{user_config_dirs}/breezerc.lock rwk,
+  owner @{user_config_dirs}/Kvantum/{,**} r,
+  owner @{user_config_dirs}/breezerc.@{rand6} rwl -> @{user_config_dirs}/#@{int},
+
+  owner @{user_share_dirs}/aurorae/themes/{,**} r,
+  owner @{user_share_dirs}/kscreen/* r,
+  owner @{user_share_dirs}/kwin/effects/{,**} r,
+  owner @{user_share_dirs}/kwin/scripts/{,**} r,
+  owner @{user_share_dirs}/plasma/desktoptheme/{,**} r,
+  owner @{user_share_dirs}/smod/decorations/{,**} r,
+
+  owner @{run}/user/@{uid}/pipewire-@{int} rw,
+
+  owner /dev/shm/.org.chromium.Chromium.@{rand6} rw,
+
+  @{att}@{run}/systemd/inhibit/@{int}.ref rw,
+
+  @{sys}/bus/ r,
+  @{sys}/class/ r,
+  @{sys}/class/drm/ r,
+  @{sys}/class/input/ r,
+  @{sys}/devices/**/uevent r,
+
+  @{run}/udev/data/+acpi:* r,             # Exposes ACPI objects (power buttons, batteries, thermal)
+  @{run}/udev/data/+dmi:* r,              # for motherboard info
+  @{run}/udev/data/+hid:* r,              # For Human Interface Device (mice, controllers, drawing tablets, scanners)
+  @{run}/udev/data/+input:input@{int} r,  # for mouse, keyboard, touchpad
+  @{run}/udev/data/+pci:* r,              # Identifies all PCI devices (CPU, GPU, Network, Disks, USB, etc.)
+  @{run}/udev/data/+platform:* r,         # Identifies onboard devices (laptop/board model, power controllers, thermal sensors)
+  @{run}/udev/data/+serio:* r,            # for touchpad
+  @{run}/udev/data/+sound:card@{int} r,   # for sound card
+  @{run}/udev/data/+usb:* r,              # Identifies all USB devices
+
+  @{run}/udev/data/c10:@{int} r,          # for non-serial mice, misc features
+  @{run}/udev/data/c13:@{int}  r,         # for /dev/input/*
+  @{run}/udev/data/c189:@{int} r,         # for /dev/bus/usb/**
+
+  owner @{PROC}/@{pid}/task/@{tid}/comm rw,
+
+  @{att}/dev/input/event@{int} rw,
+  @{att}/dev/dri/card@{int} rw,
+
+  /dev/tty r,
+  /dev/tty@{u8} rw,
+
+  profile at-spi flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+    include <abstractions/attached/base>
+    include <abstractions/bus-session>
+    include <abstractions/attached/consoles>
+
+    unix bind type=stream addr=@@{udbus}/bus/busctl/busctl,
+
+    @{sh_path}    r,
+    @{bin}/busctl rix,
+    @{bin}/sed    rix,
+    @{bin}/xprop  rpx,
+
+    /etc/xdg/Xwayland-session.d/00-at-spi r,
+
+    /home/ r,
+    owner @{HOME}/ r,
+
+    include if exists <local/kwin_wayland_at-spi>
+  }
+
+  profile pulseaudio flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+    include <abstractions/attached/base>
+    include <abstractions/attached/consoles>
+
+    @{sh_path}   rix,
+    @{bin}/pactl  px,
+
+    /etc/xdg/Xwayland-session.d/00-pulseaudio-x11 r,
+
+    owner @{HOME}/ r,
+
+    include if exists <local/kwin_wayland_pulseaudio>
+  }
+
+  profile ibus flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+    include <abstractions/attached/base>
+    include <abstractions/attached/consoles>
+
+    @{sh_path}    r,
+    @{lib}/{,ibus/}ibus-x11 rpx,
+
+    /etc/xdg/Xwayland-session.d/10-ibus-x11 r,
+
+    /home/ r,
+    owner @{HOME}/ r,
+
+    include if exists <local/kwin_wayland_ibus>
+  }
+
+  include if exists <local/kwin_wayland>
+}
+
+# vim:syntax=apparmor

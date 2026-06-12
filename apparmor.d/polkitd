@@ -1,0 +1,118 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2018-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/polkitd @{lib}/polkit-1/polkitd
+@{att} = /att/polkitd/
+profile polkitd /{{,usr/}lib{,exec,32,64}/polkitd,{,usr/}lib{,exec,32,64}/polkit-1/polkitd} flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-system>
+  include <abstractions/bus/system/org.freedesktop.systemd1>
+  include <abstractions/attached/nameservice-strict>
+
+  capability setgid,
+  capability setuid,
+  capability sys_nice,
+  capability sys_ptrace,
+  audit capability net_admin,
+
+  ptrace read,
+
+  #aa/dbus own bus=system name=org.freedesktop.PolicyKit1
+  include <abstractions/bus/system/own>
+  dbus bind bus=system name=org.freedesktop.PolicyKit1{,.*},
+  dbus receive bus=system path=/org/freedesktop/PolicyKit1{,/**}
+       interface=org.freedesktop.PolicyKit1{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=system path=/org/freedesktop/PolicyKit1{,/**}
+       interface=org.freedesktop.PolicyKit1{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=system path=/org/freedesktop/PolicyKit1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=system path=/org/freedesktop/PolicyKit1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=system path=/org/freedesktop/PolicyKit1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.PolicyKit1{,.*}}"),
+  dbus send bus=system path=/org/freedesktop/PolicyKit1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  dbus send bus=system path=/org/kde/PolicyKit1/AuthenticationAgent
+       interface=org.freedesktop.PolicyKit1.AuthenticationAgent
+       member=BeginAuthentication
+       peer=(name=@{busname}, label=polkit-kde-authentication-agent),
+
+  @{exec_path} mr,
+
+  @{bin}/pkla-check-authorization  rpx,
+  @{bin}/pkla-admin-identities     rpx,
+
+  /usr/share/gvfs/remote-volume-monitors/{,**} r,
+  /usr/share/polkit-1/polkitd.conf r,
+
+  /etc/machine-id r,
+
+  # System rules
+  /etc/polkit-1/rules.d/ r,
+  /etc/polkit-1/rules.d/@{int2}-*.rules r,
+  /etc/polkit-1/localauthority/{,**} r,
+  /etc/polkit-1/localauthority.conf.d/{,**} r,
+  /etc/polkit-1/actions/{,*.policy} r,
+
+  # Vendor rules
+  /usr/share/polkit-1/rules.d/ r,
+  /usr/share/polkit-1/rules.d/*.rules r,
+  /usr/share/polkit-1/rules.d/*.rules.example r,
+
+  # Vendor policies
+  /usr/share/polkit-1/actions/ r,
+  /usr/share/polkit-1/actions/*.policy r,
+  /usr/share/polkit-1/actions/*.policy.choice r,
+
+        /var/lib/polkit{,-1}/localauthority/{,**} r,
+  owner /var/lib/polkit{,-1}/.cache/ rw,
+
+  @{run}/polkit-1/rules.d/ r,
+  @{run}/polkit-1/rules.d/*.policy r,
+
+  @{att}@{run}/systemd/userdb/io.systemd.DynamicUser rw,
+  @{att}@{run}/systemd/userdb/io.systemd.Home rw,
+  @{att}@{run}/systemd/userdb/io.systemd.Machine rw,
+  @{att}@{run}/systemd/userdb/io.systemd.Multiplexer rw,
+  @{att}@{run}/systemd/userdb/org.gnome.DisplayManager rw,
+
+  @{run}/systemd/sessions/* r,
+  @{run}/systemd/users/@{uid} r,
+
+  @{PROC}/@{pids}/cgroup r,
+  @{PROC}/@{pids}/cmdline r,
+  @{PROC}/@{pids}/fdinfo/@{int} r,
+  @{PROC}/@{pids}/stat r,
+  @{PROC}/@{pids}/status r,
+  @{PROC}/@{pids}/task/@{tid}/stat r,
+  @{PROC}/1/environ r,
+  @{PROC}/cmdline r,
+  @{PROC}/sys/kernel/osrelease r,
+
+  owner @{PROC}/@{pid}/fdinfo/@{int} r,
+
+  include if exists <local/polkitd>
+}
+
+# vim:syntax=apparmor

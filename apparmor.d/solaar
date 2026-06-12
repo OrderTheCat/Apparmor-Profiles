@@ -1,0 +1,46 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2026 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/solaar
+@{att} = /att/solaar/
+profile solaar /{,usr/}bin/solaar flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus/system/org.freedesktop.login1>
+  include <abstractions/dconf-write>
+  include <abstractions/desktop>
+  include <abstractions/devices-u2f>
+  include <abstractions/devices-usb-read>
+  include <abstractions/input>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/python>
+  include <abstractions/uinput>
+  include <abstractions/upower-observe>
+
+  network netlink raw,
+
+  @{exec_path} mr,
+
+  @{sbin}/ldconfig  ix,
+  @{bin}/git        ix,
+
+  owner @{user_config_dirs}/solaar/{,**} rw,
+
+  owner /var/tmp/@{word8} rw,
+  owner @{tmp}/Solaar_@{rand8} rw,
+  owner @{tmp}/@{word8} rw,
+
+  owner @{PROC}/@{pid}/cgroup r,
+  owner @{PROC}/@{pid}/mounts r,
+
+  deny @{bin}/git x,
+  deny @{HOME}/@{word8} rw,
+
+  include if exists <local/solaar>
+}
+
+# vim:syntax=apparmor

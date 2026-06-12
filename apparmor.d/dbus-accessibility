@@ -1,0 +1,142 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/{,at-spi2{,-core}/}at-spi-bus-launcher
+@{att} = /att/dbus-accessibility/
+profile dbus-accessibility /{,usr/}lib{,exec,32,64}/{,at-spi2{,-core}/}at-spi-bus-launcher flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-accessibility>
+  include <abstractions/bus-session>
+  include <abstractions/bus-system>
+  include <abstractions/bus/session/org.a11y>
+  include <abstractions/attached/consoles>
+  include <abstractions/dconf-write>
+  include <abstractions/gschemas>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/session-manager>
+
+  network inet dgram,
+  network inet stream,
+  network inet6 dgram,
+  network inet6 stream,
+  network netlink raw,
+
+  ptrace read,
+
+  signal receive set=(term hup kill) peer=dbus-session,
+  signal receive set=(term hup kill) peer=gdm{,-session-worker},
+  signal receive set=(term hup kill) peer=gnome-session-binary,
+
+  unix bind type=stream addr=@@{udbus}/bus/dbus-broker-lau/user,
+
+  #aa/dbus own bus=accessibility name=org.freedesktop.DBus path=/{,org/freedesktop/{dBus,DBus,dbus}}
+  include <abstractions/bus/accessibility/own>
+  dbus bind bus=accessibility name=org.freedesktop.DBus{,.*},
+  dbus receive bus=accessibility path=/{,org/freedesktop/{dBus,DBus,dbus}}
+       interface=org.freedesktop.DBus{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=accessibility path=/{,org/freedesktop/{dBus,DBus,dbus}}
+       interface=org.freedesktop.DBus{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=accessibility path=/{,org/freedesktop/{dBus,DBus,dbus}}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=accessibility path=/{,org/freedesktop/{dBus,DBus,dbus}}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=accessibility path=/{,org/freedesktop/{dBus,DBus,dbus}}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.DBus{,.*}}"),
+  dbus send bus=accessibility path=/{,org/freedesktop/{dBus,DBus,dbus}}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=session name=org.a11y.{B,b}us
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.a11y.{B,b}us{,.*},
+  dbus receive bus=session path=/org/a11y/{B,b}us{,/**}
+       interface=org.a11y.{B,b}us{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/a11y/{B,b}us{,/**}
+       interface=org.a11y.{B,b}us{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/a11y/{B,b}us{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/a11y/{B,b}us{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/a11y/{B,b}us{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.a11y.{B,b}us{,.*}}"),
+  dbus send bus=session path=/org/a11y/{B,b}us{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  dbus receive bus=accessibility path=/org/freedesktop/DBus
+       interface=org.freedesktop.DBus
+       member=Hello
+       peer=(name=@{busname}),
+
+  dbus receive bus=session
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name=@{busname}, label="{gnome-shell,gnome-extension}"),
+
+  @{exec_path} mrix,
+
+  @{bin}/dbus-broker                           rix,
+  @{bin}/dbus-broker-launch                    rix,
+  @{bin}/dbus-daemon                           rix,
+  @{lib}/at-spi2-registryd                     rpx,
+  @{lib}/at-spi2{,-core}/at-spi2-registryd     rpx,
+
+  /usr/share/dbus-1/accessibility-services/{,**} r,
+  /usr/share/defaults/at-spi2/{,**} r,
+
+  /etc/machine-id r,
+  /var/lib/dbus/machine-id r,
+
+  owner @{HOME}/.Xauthority r,
+
+  owner @{tmp}/xauth_@{rand6} r,
+
+        @{run}/systemd/users/@{uid} r,
+  owner @{run}/user/@{uid}/gdm/Xauthority r,
+
+  @{sys}/kernel/security/apparmor/.access rw,
+  @{sys}/kernel/security/apparmor/features/dbus/mask r,
+  @{sys}/module/apparmor/parameters/enabled r,
+
+        @{PROC}/@{pid}/cmdline r,
+        @{PROC}/1/cgroup r,
+  owner @{PROC}/@{pid}/attr/apparmor/current r,
+  owner @{PROC}/@{pid}/cgroup r,
+  owner @{PROC}/@{pid}/fd/ r,
+  owner @{PROC}/@{pid}/fdinfo/@{int} r,
+  owner @{PROC}/@{pid}/mounts r,
+  owner @{PROC}/@{pid}/oom_score_adj r,
+
+  include if exists <local/dbus-accessibility>
+}
+
+# vim:syntax=apparmor

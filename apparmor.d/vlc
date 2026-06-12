@@ -1,0 +1,96 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2017-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/{c,}vlc
+@{att} = /att/vlc/
+profile vlc /{,usr/}bin/{c,}vlc flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+  include <abstractions/attached/base>
+  include <abstractions/audio-client>
+  include <abstractions/camera>
+  include <abstractions/dconf-write>
+  include <abstractions/desktop>
+  include <abstractions/devices-usb>
+  include <abstractions/fontconfig-cache-read>
+  include <abstractions/graphics>
+  include <abstractions/gstreamer>
+  include <abstractions/ibus-strict>
+  include <abstractions/mpris>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/qt5-settings-write>
+  include <abstractions/screensaver>
+  include <abstractions/secrets-service>
+  include <abstractions/ssl_certs>
+  include <abstractions/thumbnails-cache-read>
+  include <abstractions/user-download-strict>
+
+  network inet dgram,
+  network inet6 dgram,
+  network inet stream,
+  network inet6 stream,
+  network netlink raw,
+
+  @{exec_path} mrix,
+
+  @{open_path}           rpx -> child-open-help,
+  @{bin}/xdg-screensaver rpx,
+  @{bin}/proxy            cx -> proxy,
+
+  /usr/share/vlc/{,**} r,
+
+  /etc/fstab r,
+
+  owner @{HOME}/ r,
+  owner @{MOUNTS}/ r,
+
+  owner @{user_music_dirs}/{,**} rw,
+  owner @{user_pictures_dirs}/{,**} rw,
+  owner @{user_torrents_dirs}/{,**} rw,
+  owner @{user_videos_dirs}/{,**} rw,
+
+  owner @{user_cache_dirs}/vlc/ rw,
+  owner @{user_cache_dirs}/vlc/{,**} rw,
+
+  owner @{user_config_dirs}/vlc/ rw,
+  owner @{user_config_dirs}/vlc/** rwkl -> @{user_config_dirs}/vlc/#@{int},
+
+  owner @{user_share_dirs}/vlc/{,**} rw,
+
+  owner @{run}/user/@{uid}/gvfs/smb-share:server=*,share=**/ r,
+  owner @{run}/user/@{uid}/gvfs/smb-share:server=*,share=** r,
+
+        @{PROC}/@{pids}/net/if_inet6 r,
+  owner @{PROC}/@{pid}/cmdline r,
+  owner @{PROC}/@{pid}/mountinfo r,
+  owner @{PROC}/@{pid}/mounts r,
+  owner @{PROC}/@{pid}/task/@{tid}/comm rw,
+
+  @{run}/mount/utab r,
+
+        /dev/shm/#@{int} rw,
+        /dev/snd/ r,
+        /dev/tty r,
+  owner /dev/tty@{u8} rw,
+
+  # Silencer
+  deny @{lib}/@{multiarch}/vlc/{,**} w,
+  deny @{user_share_dirs}/gvfs-metadata/{*,} r,
+
+  profile proxy flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+    include <abstractions/attached/base>
+    include <abstractions/dconf-write>
+
+    @{bin}/proxy mr,
+
+    include if exists <local/vlc_proxy>
+  }
+
+  include if exists <local/vlc>
+}
+
+# vim:syntax=apparmor

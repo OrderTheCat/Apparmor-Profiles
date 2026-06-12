@@ -1,0 +1,23 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{att} = /att/child-open-help/
+profile child-open-help flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+  include <abstractions/attached/base>
+  include <abstractions/app/open>
+
+  @{browsers_path}              px,
+  @{help_path}                  px,
+  @{bin}/flatpak                px,
+  @{bin}/snap                   px,
+
+  include if exists <usr/child-open-help.d>
+  include if exists <local/child-open-help>
+}
+
+# vim:syntax=apparmor

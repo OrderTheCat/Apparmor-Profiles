@@ -1,0 +1,154 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 Jeroen Rijken
+# Copyright (C) 2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path}  = @{bin}/ksmserver-logout-greeter
+@{exec_path} += @{lib}/@{multiarch}/{,libexec/}ksmserver-logout-greeter
+@{att} = /att/ksmserver-logout-greeter/
+profile ksmserver-logout-greeter /{{,usr/}bin/ksmserver-logout-greeter,{,usr/}lib{,exec,32,64}/*-linux-gnu*/{,libexec/}ksmserver-logout-greeter,{,usr/}lib{,exec,32,64}/*-linux-gnu*/{,libexec/}ksmserver-logout-greeter} flags=(attach_disconnected,attach_disconnected.path=@{att},mediate_deleted,complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-session>
+  include <abstractions/attached/consoles>
+  include <abstractions/fontconfig-cache-read>
+  include <abstractions/kde-strict>
+  include <abstractions/graphics>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/qt5-shader-cache>
+
+  #aa/dbus own bus=session name=org.kde.LogoutPrompt path=/LogoutPrompt
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.kde.LogoutPrompt{,.*},
+  dbus receive bus=session path=/LogoutPrompt
+       interface=org.kde.LogoutPrompt{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/LogoutPrompt
+       interface=org.kde.LogoutPrompt{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/LogoutPrompt
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/LogoutPrompt
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/LogoutPrompt
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.kde.LogoutPrompt{,.*}}"),
+  dbus send bus=session path=/LogoutPrompt
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  #aa/dbus talk bus=session name=org.kde.LogoutPrompt path=/Shutdown label=plasma-shutdown
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=plasma-shutdown),
+  # org.kde.LogoutPrompt: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/Shutdown
+       interface=org.kde.LogoutPrompt{,.*}
+       peer=(name="{@{busname},org.kde.LogoutPrompt{,.*},org.freedesktop.DBus}", label=plasma-shutdown),
+  dbus send bus=session path=/Shutdown
+       interface=org.kde.LogoutPrompt{,.*}
+       peer=(name="org.kde.LogoutPrompt{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/Shutdown
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.kde.LogoutPrompt{,.*},org.freedesktop.DBus}", label=plasma-shutdown),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/Shutdown
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.kde.LogoutPrompt{,.*},org.freedesktop.DBus}", label=plasma-shutdown),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/Shutdown
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.kde.LogoutPrompt{,.*},org.freedesktop.DBus}", label=plasma-shutdown),
+  dbus receive bus=session path=/Shutdown
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.kde.LogoutPrompt{,.*},org.freedesktop.DBus}", label=plasma-shutdown),
+
+  #aa/dbus talk bus=session name=org.kde.KWin label=kwin_wayland
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=kwin_wayland),
+  # org.kde.KWin: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/kde/KWin{,/**}
+       interface=org.kde.KWin{,.*}
+       peer=(name="{@{busname},org.kde.KWin{,.*},org.freedesktop.DBus}", label=kwin_wayland),
+  dbus send bus=session path=/org/kde/KWin{,/**}
+       interface=org.kde.KWin{,.*}
+       peer=(name="org.kde.KWin{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/kde/KWin{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.kde.KWin{,.*},org.freedesktop.DBus}", label=kwin_wayland),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/kde/KWin{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.kde.KWin{,.*},org.freedesktop.DBus}", label=kwin_wayland),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/kde/KWin{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.kde.KWin{,.*},org.freedesktop.DBus}", label=kwin_wayland),
+  dbus receive bus=session path=/org/kde/KWin{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.kde.KWin{,.*},org.freedesktop.DBus}", label=kwin_wayland),
+
+
+  @{exec_path} mr,
+
+  @{lib}/os-release r,
+
+  / r,
+  /etc/machine-id r,
+  /etc/timezone r,
+
+  /usr/share/plasma/desktoptheme/** r,
+  /usr/share/plasma/look-and-feel/** r,
+  /var/lib/AccountsService/icons/ r,
+
+  owner @{HOME}/ r,
+  owner @{HOME}/.face r,
+
+  owner @{user_cache_dirs}/ r,
+  owner @{user_cache_dirs}/#@{int} rwlk,
+  owner @{user_cache_dirs}/kcrash-metadata/ r,
+  owner @{user_cache_dirs}/ksmserver-logout-greeter/ rw,
+  owner @{user_cache_dirs}/ksmserver-logout-greeter/** rwlk,
+  owner @{user_cache_dirs}/plasma_theme_*.kcache rw,
+  owner @{user_cache_dirs}/plasma-svgelements rw,
+  owner @{user_cache_dirs}/plasma-svgelements.@{rand6} rwl -> @{user_cache_dirs}/#@{int},
+  owner @{user_cache_dirs}/plasma-svgelements.lock rwk,
+
+  owner @{user_config_dirs}/ r,
+  owner @{user_config_dirs}/kdedefaults/kscreenlockerrc r,
+  owner @{user_config_dirs}/kdedefaults/plasmarc r,
+  owner @{user_config_dirs}/kscreenlockerrc r,
+  owner @{user_config_dirs}/ksmserverrc r,
+  owner @{user_config_dirs}/plasmarc r,
+
+  owner @{run}/user/@{uid}/ r,
+
+        @{PROC}/sys/dev/i915/perf_stream_paranoid r,
+  owner @{PROC}/@{pid}/exe r,
+
+  include if exists <local/ksmserver-logout-greeter>
+}
+
+# vim:syntax=apparmor

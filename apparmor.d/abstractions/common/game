@@ -1,0 +1,42 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+# NEEDS-VARIABLE: user_games_dirs
+# NEEDS-VARIABLE: system_games_dirs
+# NEEDS-VARIABLE: XDG_GAMESSTUDIO_DIR
+
+# Common set of locations for any games on Linux. Runtimes independants.
+#
+# This abstraction uses the following tunables:
+#
+# - `@{XDG_GAMESSTUDIO_DIR}/` for game studio and game engines specific directories
+#   (Default: `@{XDG_GAMESSTUDIO_DIR}="unity3d"`)
+# - `@{user_games_dirs}/` for user specific game directories (eg: steam storage dir)
+
+  abi <abi/4.0>,
+
+  /var/ r,
+  /var/lib/ r,
+  @{system_games_dirs}/ r,
+  @{system_games_dirs}/*/ r,
+  @{system_games_dirs}/*/** mrix,
+  @{system_games_dirs}/*/**cache* w,
+
+  owner @{user_games_dirs}/ r,
+  owner @{user_games_dirs}/*/ r,
+  owner @{user_games_dirs}/*/** mrix,
+  owner @{user_games_dirs}/*/**cache* w,
+
+  owner @{user_config_dirs}/MangoHud/MangoHud.conf r,
+
+  owner @{user_config_dirs}/@{XDG_GAMESSTUDIO_DIR}/ rw,
+  owner @{user_config_dirs}/@{XDG_GAMESSTUDIO_DIR}/** rwlk,
+
+  owner @{user_share_dirs}/@{XDG_GAMESSTUDIO_DIR}/ rw,
+  owner @{user_share_dirs}/@{XDG_GAMESSTUDIO_DIR}/** rwlk,
+
+  owner @{tmp}/CASESENSITIVETEST@{hex32} rw,
+
+  include if exists <abstractions/common/game.d>
+
+# vim:syntax=apparmor

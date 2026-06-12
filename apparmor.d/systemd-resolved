@@ -1,0 +1,84 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/systemd/systemd-resolved
+@{att} = /att/systemd-resolved/
+profile systemd-resolved /{,usr/}lib{,exec,32,64}/systemd/systemd-resolved flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-system>
+  include <abstractions/bus/system/org.freedesktop.login1>
+  include <abstractions/common/systemd>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/p11-kit>
+  include <abstractions/ssl_certs>
+
+  capability net_bind_service,
+  capability net_raw,
+  capability setpcap,
+
+  network unix stream,
+  network unix dgram,
+
+  network inet dgram,
+  network inet stream,
+  network inet6 dgram,
+  network inet6 stream,
+  network netlink raw,
+
+  #aa/dbus own bus=system name=org.freedesktop.resolve1
+  include <abstractions/bus/system/own>
+  dbus bind bus=system name=org.freedesktop.resolve1{,.*},
+  dbus receive bus=system path=/org/freedesktop/resolve1{,/**}
+       interface=org.freedesktop.resolve1{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=system path=/org/freedesktop/resolve1{,/**}
+       interface=org.freedesktop.resolve1{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=system path=/org/freedesktop/resolve1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=system path=/org/freedesktop/resolve1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=system path=/org/freedesktop/resolve1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.resolve1{,.*}}"),
+  dbus send bus=system path=/org/freedesktop/resolve1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  @{exec_path} mr,
+
+  /etc/systemd/resolved.conf r,
+  /etc/systemd/resolved.conf.d/{,*} r,
+
+        @{run}/systemd/netif/io.systemd.Network rw,
+  @{att}@{run}/systemd/netif/io.systemd.Network rw,
+
+  @{att}@{run}/systemd/resolve.hook/io.systemd.Network rw,
+  @{run}/systemd/netif/links/* r,
+  @{run}/systemd/resolve.hook/{,**} rw,
+  @{run}/systemd/resolve/{,**} rw,
+
+  @{PROC}/@{pid}/cgroup r,
+  @{PROC}/pressure/* r,
+  @{PROC}/sys/kernel/hostname r,
+  @{PROC}/sys/net/ipv{4,6}/conf/all/disable_ipv{4,6} r,
+
+  include if exists <local/systemd-resolved>
+}
+
+# vim:syntax=apparmor

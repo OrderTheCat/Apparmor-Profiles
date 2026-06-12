@@ -1,0 +1,23 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2020-2022 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+  @{bin}/ r,
+  @{python_path} mr,
+
+        @{user_lib_dirs}/@{python_name}/ r,
+        @{user_lib_dirs}/@{python_name}/site-packages/ r,
+  owner @{user_lib_dirs}/@{python_name}/{site,dist}-packages/ r,
+  owner @{user_lib_dirs}/@{python_name}/{site,dist}-packages/**/ r,
+  owner @{user_lib_dirs}/@{python_name}/**.{egg,py,pyi,pth} r,
+  owner @{user_lib_dirs}/@{python_name}/**.{pyc,so} mr,
+  owner @{user_lib_dirs}/@{python_name}/**/entry_points.txt r,
+
+
+  # Normal python run do not need to update pycache files. It is done by pycompile.
+  audit @{lib}/@{python_name}/{,**/}__pycache__/ w,
+  audit @{lib}/@{python_name}/{,**/}__pycache__/**.pyc w,
+  audit @{lib}/@{python_name}/{,**/}__pycache__/**.pyc.@{u64} w,
+
+# vim:syntax=apparmor

@@ -1,0 +1,33 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/cups/backend/hp{,fax}
+@{att} = ""
+profile cups-backend-hp /{,usr/}lib{,exec,32,64}/cups/backend/hp{,fax} flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/devices-usb>
+  include <abstractions/nameservice-strict>
+  include <abstractions/python>
+
+  network netlink raw,
+
+  @{exec_path} mr,
+
+  /usr/share/hplip/{,**} r,
+
+  /etc/papersize r,
+  /etc/paperspecs r,
+  /etc/hp/** r,
+
+  owner /var/spool/cups/tmp/.hplip/ w,
+  owner /var/spool/cups/tmp/.hplip/hplip.conf rw,
+
+  include if exists <local/cups-backend-hp>
+}
+
+# vim:syntax=apparmor

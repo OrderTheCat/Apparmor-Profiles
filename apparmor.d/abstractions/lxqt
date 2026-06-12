@@ -1,0 +1,43 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2024 Besanon <m231009ts@mailfence.com>
+# SPDX-License-Identifier: GPL-2.0-only
+
+  abi <abi/4.0>,
+
+  include <abstractions/accessibility>
+  include <abstractions/app-indicator>
+  include <abstractions/bus-session>
+  include <abstractions/bus-system>
+  include <abstractions/bus/session/org.freedesktop.Application>
+  include <abstractions/bus/session/org.freedesktop.portal.Desktop>
+  include <abstractions/bus/session/org.freedesktop.portal.Settings>
+  include <abstractions/desktop-files>
+  include <abstractions/fonts-strict>
+  include <abstractions/gschemas>
+  include <abstractions/gtk-strict>
+  include <abstractions/icons>
+  include <abstractions/mime>
+  include <abstractions/notifications>
+  include <abstractions/qt5>
+  include <abstractions/recently-used>
+  include <abstractions/themes>
+  include <abstractions/user-dirs>
+  include <abstractions/wayland-strict>
+  include <abstractions/X-strict>
+  include <abstractions/xdg-desktop>
+
+  signal (receive) set=(kill, term) peer=lxqt-session,
+
+  /usr/share/hwdata/pnp.ids r,
+  /usr/share/icu/@{int}.@{int}/*.dat r,
+  /usr/share/lxqt/** r,
+
+  owner @{HOME}/.Xdefaults r,
+
+  owner @{user_cache_dirs}/lxqt-notificationd/* r,
+
+  owner @{user_config_dirs}/lxqt/*.conf rw,
+
+  include if exists <abstractions/lxqt.d>
+
+# vim:syntax=apparmor

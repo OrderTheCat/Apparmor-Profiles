@@ -1,0 +1,175 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{share_dirs}  = /usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io
+@{share_dirs} += @{user_share_dirs}/gnome-shell/extensions/gsconnect@andyholmes.github.io
+
+@{exec_path} = @{share_dirs}/service/daemon.js @{share_dirs}/gsconnect-preferences
+@{att} = /att/gnome-extension-gsconnect/
+profile gnome-extension-gsconnect /{usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/service/daemon.js,home/*/.local/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/service/daemon.js,home/*/.local/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/service/daemon.js,usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/gsconnect-preferences,home/*/.local/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/gsconnect-preferences,home/*/.local/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/gsconnect-preferences} flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/audio-client>
+  include <abstractions/bus/session/org.freedesktop.FileManager1>
+  include <abstractions/bus/session/org.freedesktop.FileManager1>
+  include <abstractions/bus/session/org.gtk.vfs.Daemon>
+  include <abstractions/bus/session/org.gtk.vfs.MountOperation>
+  include <abstractions/bus/system/org.freedesktop.hostname1>
+  include <abstractions/bus/system/org.freedesktop.login1>
+  include <abstractions/dconf-write>
+  include <abstractions/gnome-strict>
+  include <abstractions/mpris>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/network-manager-observe>
+  include <abstractions/p11-kit>
+  include <abstractions/ssl_certs>
+  include <abstractions/user-download-strict>
+
+  network inet dgram,
+  network inet6 dgram,
+  network inet stream,
+  network inet6 stream,
+  network netlink raw,
+
+  unix type=stream addr=none peer=(label=gvfsd-*, addr=none),
+
+  #aa/dbus own bus=session name=org.gnome.Shell.Extensions.GSConnect
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gnome.Shell.Extensions.GSConnect{,.*},
+  dbus receive bus=session path=/org/gnome/Shell/Extensions/GSConnect{,/**}
+       interface=org.gnome.Shell.Extensions.GSConnect{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/Shell/Extensions/GSConnect{,/**}
+       interface=org.gnome.Shell.Extensions.GSConnect{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gnome/Shell/Extensions/GSConnect{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gnome/Shell/Extensions/GSConnect{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gnome/Shell/Extensions/GSConnect{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.Shell.Extensions.GSConnect{,.*}}"),
+  dbus send bus=session path=/org/gnome/Shell/Extensions/GSConnect{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  #aa/dbus own bus=session name=org.mpris.MediaPlayer2.GSConnect.*
+  dbus bind bus=session name=org.mpris.MediaPlayer2.GSConnect.*{,.*},
+  dbus receive bus=session path=/org/mpris/MediaPlayer2/GSConnect/*{,/**}
+       interface=org.mpris.MediaPlayer2.GSConnect.*{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/mpris/MediaPlayer2/GSConnect/*{,/**}
+       interface=org.mpris.MediaPlayer2.GSConnect.*{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/mpris/MediaPlayer2/GSConnect/*{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/mpris/MediaPlayer2/GSConnect/*{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/mpris/MediaPlayer2/GSConnect/*{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.mpris.MediaPlayer2.GSConnect.*{,.*}}"),
+  dbus send bus=session path=/org/mpris/MediaPlayer2/GSConnect/*{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  dbus send bus=session path=/org/freedesktop/DBus
+       interface=org.freedesktop.DBus.Monitoring
+       member=BecomeMonitor
+       peer=(name=org.freedesktop.DBus, label="@{p_dbus_session}"),
+
+  dbus send bus=session path=/org/mpris/MediaPlayer2
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll}
+       peer=(name=@{busname}),
+
+  dbus receive bus=session path=/org/mpris/MediaPlayer2
+       interface=org.freedesktop.DBus.Properties
+       member=PropertiesChanged
+       peer=(name=@{busname}),
+  dbus send bus=session path=/org/mpris/MediaPlayer2
+       interface=org.mpris.MediaPlayer2.Player
+       member=PlayPause
+       peer=(name=@{busname}),
+
+  dbus eavesdrop bus=session,
+
+  @{exec_path} mr,
+
+  @{sh_path}          rix,
+  @{bin}/env          rix,
+  @{bin}/gjs-console  rix,
+  @{bin}/openssl      rix,
+  @{bin}/ssh-add      rix,
+
+  @{bin}/dconf            rpx,
+  @{bin}/ssh-keygen       rpx,
+  @{bin}/xdg-screensaver  rpx,
+
+  @{lib}/gio/modules/*.so* rm,
+  @{lib}/girepository-1.0/* r,
+
+  @{open_path}  rpx -> child-open-help,
+
+  @{share_dirs}/{,**} r,
+  @{share_dirs}/gsconnect-preferences rix,
+
+  /snap/*/@{uid}/**.@{icon_ext} r,
+  /usr/share/**.@{icon_ext} r,
+  /var/lib/flatpak/appstream/**/icons/{,**} r,
+
+  owner @{user_cache_dirs}/gsconnect/{,**} rw,
+  owner @{user_cache_dirs}/*/**.@{icon_ext} r,
+
+  owner @{user_config_dirs}/gsconnect/{,**} rw,
+  owner @{user_config_dirs}/mimeapps.list w,
+  owner @{user_config_dirs}/mimeapps.list.@{rand6} rw,
+
+  owner @{HOME}/.mozilla/firefox{,-esr}/firefox-mpris/@{word}.@{icon_ext} r,
+  owner @{HOME}/.var/app/*/**.@{icon_ext} r,
+
+  owner @{tmp}/.org.chromium.Chromium.@{rand6} r,
+
+  owner @{run}/user/@{uid}/app/*/.org.chromium.Chromium.@{rand6} r,
+  owner @{run}/user/@{uid}/gcr/ssh rw,
+  owner @{run}/user/@{uid}/gsconnect/{,**} rw,
+  owner @{run}/user/@{uid}/gvfsd/socket-@{rand8} rw,
+  owner @{run}/user/@{uid}/keyring/ssh rw,
+
+  @{sys}/devices/virtual/dmi/id/chassis_type r,
+
+  owner @{PROC}/@{pid}/cgroup r,
+  owner @{PROC}/@{pid}/mounts r,
+  owner @{PROC}/@{pid}/stat r,
+  owner @{PROC}/@{pid}/statm r,
+  owner @{PROC}/@{pid}/task/@{tid}/stat r,
+
+  deny @{user_share_dirs}/gvfs-metadata/* r,
+
+  include if exists <local/gnome-extension-gsconnect>
+}
+
+# vim:syntax=apparmor

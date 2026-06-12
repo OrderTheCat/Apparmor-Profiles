@@ -1,0 +1,344 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2020-2022 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/{,fwupd/}fwupd
+@{att} = /att/fwupd/
+profile fwupd /{,usr/}lib{,exec,32,64}/{,fwupd/}fwupd flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bluetooth-observe>
+  include <abstractions/bus-system>
+  include <abstractions/bus/system/org.freedesktop.PolicyKit1>
+  include <abstractions/attached/consoles>
+  include <abstractions/disks-write>
+  include <abstractions/fonts>
+  include <abstractions/mime>
+  include <abstractions/modem-manager-observe>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/network-manager-observe>
+  include <abstractions/sqlite>
+  include <abstractions/tpm>
+
+  capability dac_override,
+  capability dac_read_search,
+  capability linux_immutable,
+  capability mknod,
+  capability net_admin,
+  capability sys_admin,
+  capability sys_nice,
+  capability sys_rawio,
+  capability syslog,
+
+  network inet dgram,
+  network inet stream,
+  network inet6 dgram,
+  network inet6 stream,
+  network netlink raw,
+
+  #aa/dbus own bus=system name=org.freedesktop.fwupd path=/
+  include <abstractions/bus/system/own>
+  dbus bind bus=system name=org.freedesktop.fwupd{,.*},
+  dbus receive bus=system path=/
+       interface=org.freedesktop.fwupd{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=system path=/
+       interface=org.freedesktop.fwupd{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=system path=/
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=system path=/
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=system path=/
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.fwupd{,.*}}"),
+  dbus send bus=system path=/
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus talk bus=system name=org.bluez.GattCharacteristic1 label=bluetoothd
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=bluetoothd),
+  # org.bluez.GattCharacteristic1: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/bluez/GattCharacteristic1{,/**}
+       interface=org.bluez.GattCharacteristic1{,.*}
+       peer=(name="{@{busname},org.bluez.GattCharacteristic1{,.*},org.freedesktop.DBus}", label=bluetoothd),
+  dbus send bus=system path=/org/bluez/GattCharacteristic1{,/**}
+       interface=org.bluez.GattCharacteristic1{,.*}
+       peer=(name="org.bluez.GattCharacteristic1{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/bluez/GattCharacteristic1{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.bluez.GattCharacteristic1{,.*},org.freedesktop.DBus}", label=bluetoothd),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/bluez/GattCharacteristic1{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.bluez.GattCharacteristic1{,.*},org.freedesktop.DBus}", label=bluetoothd),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/bluez/GattCharacteristic1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.bluez.GattCharacteristic1{,.*},org.freedesktop.DBus}", label=bluetoothd),
+  dbus receive bus=system path=/org/bluez/GattCharacteristic1{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.bluez.GattCharacteristic1{,.*},org.freedesktop.DBus}", label=bluetoothd),
+
+  #aa/dbus talk bus=system name=org.freedesktop.Passim path=/ label=passimd
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=passimd),
+  # org.freedesktop.Passim: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/
+       interface=org.freedesktop.Passim{,.*}
+       peer=(name="{@{busname},org.freedesktop.Passim{,.*},org.freedesktop.DBus}", label=passimd),
+  dbus send bus=system path=/
+       interface=org.freedesktop.Passim{,.*}
+       peer=(name="org.freedesktop.Passim{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.Passim{,.*},org.freedesktop.DBus}", label=passimd),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.Passim{,.*},org.freedesktop.DBus}", label=passimd),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.Passim{,.*},org.freedesktop.DBus}", label=passimd),
+  dbus receive bus=system path=/
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.Passim{,.*},org.freedesktop.DBus}", label=passimd),
+
+  #aa/dbus talk bus=system name=org.freedesktop.UDisks2 label=udisksd
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=udisksd),
+  # org.freedesktop.UDisks2: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/UDisks2{,/**}
+       interface=org.freedesktop.UDisks2{,.*}
+       peer=(name="{@{busname},org.freedesktop.UDisks2{,.*},org.freedesktop.DBus}", label=udisksd),
+  dbus send bus=system path=/org/freedesktop/UDisks2{,/**}
+       interface=org.freedesktop.UDisks2{,.*}
+       peer=(name="org.freedesktop.UDisks2{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/UDisks2{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.UDisks2{,.*},org.freedesktop.DBus}", label=udisksd),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/UDisks2{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.UDisks2{,.*},org.freedesktop.DBus}", label=udisksd),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/UDisks2{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.UDisks2{,.*},org.freedesktop.DBus}", label=udisksd),
+  dbus receive bus=system path=/org/freedesktop/UDisks2{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.UDisks2{,.*},org.freedesktop.DBus}", label=udisksd),
+
+  #aa/dbus talk bus=system name=org.freedesktop.UPower label=upowerd
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=upowerd),
+  # org.freedesktop.UPower: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/UPower{,/**}
+       interface=org.freedesktop.UPower{,.*}
+       peer=(name="{@{busname},org.freedesktop.UPower{,.*},org.freedesktop.DBus}", label=upowerd),
+  dbus send bus=system path=/org/freedesktop/UPower{,/**}
+       interface=org.freedesktop.UPower{,.*}
+       peer=(name="org.freedesktop.UPower{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/UPower{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.UPower{,.*},org.freedesktop.DBus}", label=upowerd),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/UPower{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.UPower{,.*},org.freedesktop.DBus}", label=upowerd),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/UPower{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.UPower{,.*},org.freedesktop.DBus}", label=upowerd),
+  dbus receive bus=system path=/org/freedesktop/UPower{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.UPower{,.*},org.freedesktop.DBus}", label=upowerd),
+
+
+  dbus receive bus=system path=/
+       interface=org.freedesktop.DBus.ObjectManager
+       member=InterfacesAdded
+       peer=(name=@{busname}, label=bluetoothd),
+
+  dbus receive bus=system path=/org/bluez/hci0/dev_*
+       interface=org.bluez.Device1
+       member=Disconnected
+       peer=(name=@{busname}, label=bluetoothd),
+
+  @{exec_path} mr,
+
+  @{lib}/fwupd/fwupd-detect-cet rix,
+
+  @{bin}/gpg{,2}     rcx -> gpg,
+  @{bin}/gpgconf     rcx -> gpg,
+  @{bin}/gpgsm       rcx -> gpg,
+
+  /usr/share/fwupd/{,**} r,
+  /usr/share/gvfs/remote-volume-monitors/{,**} r,
+  /usr/share/hwdata/* r,
+  /usr/share/libdrm/*.ids r,
+  /usr/share/misc/*.ids r,
+
+  /etc/fwupd/{,**} rw,
+  /etc/lsb-release r,
+  /etc/pki/fwupd-metadata/{,**} r,
+  /etc/pki/fwupd/{,**} r,
+
+  /etc/machine-id r,
+  /var/lib/dbus/machine-id r,
+
+  @{efi}/{,**} r,
+  @{efi}/EFI/*/.goutputstream-@{rand6} rw,
+  @{efi}/EFI/*/fw/fwupd-*.cap{,.*} rw,
+  @{efi}/EFI/*/fwupdx@{int}.efi rw,
+  @{lib}/fwupd/efi/fwupdx@{int}.efi{,.signed} r,
+
+  @{MOUNTS}/ r,
+  @{MOUNTS}/@{efi}/{,**} r,
+  @{MOUNTS}/@{efi}/fwupd/efi/fwupdx@{int}.efi{,.signed} r,
+  @{MOUNTS}/**/EFI/ r,
+  @{MOUNTS}/**/EFI/**/ r,
+  @{MOUNTS}/**/EFI/*/.goutputstream-@{rand6} rw,
+  @{MOUNTS}/**/EFI/*/fw/fwupd-*.cap{,.*} rw,
+  @{MOUNTS}/**/EFI/*/fwupdx@{int}.efi rw,
+  @{run}/media/**/EFI/ r,
+  @{run}/media/**/EFI/**/ r,
+
+  owner /var/cache/fwupd/ rw,
+  owner /var/cache/fwupd/** rwk,
+
+  owner /var/lib/fwupd/ rw,
+  owner /var/lib/fwupd/** rwk,
+
+        @{att}@{user_cache_dirs}/gnome-software/fwupd/{,**} r,
+  owner @{user_cache_dirs}/fwupd/lvfs-metadata.xml.gz r,
+  owner @{user_cache_dirs}/gnome-software/fwupd/{,**} r,
+
+  @{sys}/**/ r,
+  @{sys}/devices/** r,
+
+  @{sys}/**/uevent r,
+  @{sys}/firmware/acpi/** r,
+  @{sys}/firmware/dmi/tables/DMI r,
+  @{sys}/firmware/dmi/tables/smbios_entry_point r,
+  @{sys}/firmware/efi/** r,
+  @{sys}/firmware/efi/efivars/Boot@{hex}-@{uuid} rw,
+  @{sys}/firmware/efi/efivars/BootNext-@{uuid} rw,
+  @{sys}/firmware/efi/efivars/dbx-@{uuid} rw,
+  @{sys}/firmware/efi/efivars/db-@{uuid} rw,
+  @{sys}/firmware/efi/efivars/fwupd-* rw,
+  @{sys}/firmware/efi/efivars/KEK-@{uuid} rw,
+  @{sys}/kernel/security/lockdown r,
+  @{sys}/kernel/security/tpm@{int}/binary_bios_measurements r,
+  @{sys}/power/mem_sleep r,
+
+  @{att}@{run}/systemd/inhibit/@{int}.ref rw,
+
+  @{run}/motd.d/ r,
+  @{run}/motd.d/@{int}-fwupd* rw,
+  @{run}/motd.d/fwupd/{,**} rw,
+  @{run}/mount/utab r,
+
+  @{run}/udev/data/+*:* r,                # Identifies all subsystems
+  @{run}/udev/data/c@{int}:@{int} r,      # Identifies all character devices
+
+  @{run}/reboot-required rw,
+  @{run}/reboot-required.@{rand6} rw,
+  @{run}/reboot-required.pkgs rw,
+  @{run}/reboot-required.pkgs.@{rand6} rw,
+
+  @{PROC}/@{pids}/fd/ r,
+  @{PROC}/@{pids}/mountinfo r,
+  @{PROC}/@{pids}/mounts r,
+  @{PROC}/1/cgroup r,
+  @{PROC}/cmdline r,
+  @{PROC}/modules r,
+  @{PROC}/swaps r,
+  @{PROC}/sys/kernel/tainted r,
+
+  /dev/bus/usb/ r,
+  /dev/bus/usb/@{int}/@{int} rw,
+  /dev/cpu/@{int}/msr rw,
+  /dev/dri/card@{int} rw,
+  /dev/drm_dp_aux@{int} rw,
+  /dev/gpiochip@{int} r,
+  /dev/hidraw@{int} rw,
+  /dev/ipmi@{int} rwk,
+  /dev/mei@{int} rw,
+  /dev/mem r,
+  /dev/mtd@{int} rw,
+  /dev/wmi/* r,
+
+  profile gpg flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+    include <abstractions/attached/base>
+    include <abstractions/attached/nameservice-strict>
+
+    capability dac_read_search,
+
+    @{bin}/gpg{,2}    mr,
+    @{bin}/gpgconf    mr,
+    @{bin}/gpgsm      mr,
+  @{lib}/fwupd/efi/fwupdx@{int}.efi{,.signed} r,
+
+  @{MOUNTS}/ r,
+  @{MOUNTS}/@{efi}/{,**} r,
+  @{MOUNTS}/@{efi}/fwupd/efi/fwupdx@{int}.efi{,.signed} r,
+  @{MOUNTS}/**/EFI/**/ r,
+  @{MOUNTS}/**/EFI/*/.goutputstream-@{rand6} rw,
+  @{MOUNTS}/**/EFI/*/fw/fwupd-*.cap{,.*} rw,
+  @{MOUNTS}/**/EFI/*/fwupdx@{int}.efi rw,
+
+  owner /var/cache/fwupd/ rw,
+  owner /var/cache/fwupd/** rwk,
+
+    @{bin}/gpg-agent          rix,
+    @{lib}/{,gnupg/}scdaemon  rix,
+
+    owner /var/lib/fwupd/gnupg/ rw,
+    owner /var/lib/fwupd/gnupg/** rwkl -> /var/lib/fwupd/gnupg/**,
+
+    owner @{PROC}/@{pid}/fd/ r,
+    owner @{PROC}/@{pid}/task/@{tid}/comm rw,
+
+    include if exists <local/fwupd_gpg>
+  }
+
+  include if exists <local/fwupd>
+}
+
+# vim:syntax=apparmor

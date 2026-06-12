@@ -1,0 +1,53 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/swtpm
+@{att} = ""
+profile swtpm /{,usr/}bin/swtpm flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/nameservice-strict>
+
+  audit capability chown,
+  audit capability dac_override,
+  audit capability dac_read_search,
+  audit capability fowner,
+  audit capability fsetid,
+  audit capability setgid,
+  audit capability setuid,
+  audit capability sys_admin,
+
+  network inet stream,
+  network inet6 stream,
+
+  signal receive set=term peer=libvirtd,
+
+  unix (send receive) type=stream peer=(label=swtpm_setup),
+  unix (send receive) type=stream peer=(label=libvirt-*),
+
+  @{exec_path} mr,
+
+  owner /var/lib/libvirt/swtpm/{,**} rwk,
+  owner /var/lib/swtpm/{,**} rwk,
+  owner /var/log/swtpm/libvirt/qemu/*-swtpm.log rw,
+
+        @{run}/libvirt/qemu/swtpm/*.pid rwk,
+        @{run}/libvirt/qemu/swtpm/*.sock rwk,
+  owner @{run}/swtpm/sock rw,
+  owner @{run}/user/@{uid}/libvirt/qemu/run/swtpm/*.pid rwk,
+  owner @{run}/user/@{uid}/libvirt/qemu/run/swtpm/*.sock rwk,
+
+  /tmp/.swtpm_setup.pidfile.@{rand6} rw,
+  /tmp/@{int}/.lock rwk,
+  /tmp/@{int}/vtpm.sock rw,
+
+  owner /dev/vtpmx rw,
+
+  include if exists <local/swtpm>
+}
+
+# vim:syntax=apparmor

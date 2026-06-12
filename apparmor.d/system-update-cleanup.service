@@ -1,0 +1,27 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2025 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+# systemd service: `system-update-cleanup.service`
+#
+# ```sh
+# rm -fv /system-update /etc/system-update
+# ```
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{att} = ""
+profile system-update-cleanup.service flags=(complain) {
+  include <abstractions/base-strict>
+
+  @{bin}/rm ix,
+
+  /etc/system-update w,
+  /system-update w,
+
+  include if exists <local/system-update-cleanup.service>
+}
+
+# vim:syntax=apparmor

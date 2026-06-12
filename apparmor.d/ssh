@@ -1,0 +1,69 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/ssh
+@{att} = /att/ssh/
+profile ssh /{,usr/}bin/ssh flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+  include <abstractions/devices-u2f>
+  include <abstractions/devices-usb>
+  include <abstractions/kerberosclient>
+  include <abstractions/attached/nameservice-strict>
+
+  capability dac_override,
+
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+  network netlink raw,
+
+  signal receive set=term peer=gnome-keyring-daemon,
+  signal send set=hup peer=unconfined,
+
+  @{exec_path} mrix,
+
+  @{bin}/@{shells}     rux,
+  @{bin}/ssh.hmac      r,
+
+  @{lib}/{,ssh/}ssh-sk-helper rix,
+  @{lib}/ssh-askpass/x11-ssh-askpass pux,
+
+  @{etc_ro}/ssh/ssh_config r,
+  @{etc_ro}/ssh/ssh_config.d/{,*} r,
+  @{etc_ro}/ssh/sshd_config r,
+  @{etc_ro}/ssh/sshd_config.d/{,*} r,
+  /etc/machine-id r,
+  /etc/gss/mech.d/{,*} r,
+
+  / r,
+
+  owner @{HOME}/@{XDG_SSH_DIR}/{,*} r,
+  owner @{HOME}/@{XDG_SSH_DIR}/known_hosts{,.*} rwl,
+  owner @{HOME}/@{XDG_SSH_DIR}/ssh_control_*_*_* wl,
+
+  owner @{user_projects_dirs}/**/ssh/{,*} r,
+  owner @{user_projects_dirs}/**/config r,
+
+  owner @{tmp}/krb5cc_* rwk,
+
+  owner @{run}/user/@{uid}/gcr/ssh rw, #  gcr-ssh-agent socket (i.e. Gnome only)
+  owner @{run}/user/@{uid}/gvfsd-sftp/@{hex} rwl -> @{run}/user/@{uid}/gvfsd-sftp/@{hex}.@{rand},
+  owner @{run}/user/@{uid}/gvfsd-sftp/@{hex}.@{rand} rwl -> @{run}/user/@{uid}/gvfsd-sftp/@{hex}.@{rand},
+  owner @{run}/user/@{uid}/keyring/ssh rw,
+  owner @{run}/user/@{uid}/openssh_agent rw,
+
+  owner @{PROC}/@{pid}/loginuid r,
+  owner @{PROC}/@{pid}/fd/ r,
+
+  include if exists <local/ssh>
+}
+
+# vim:syntax=apparmor

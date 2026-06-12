@@ -1,0 +1,26 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/id
+@{att} = /att/id/
+profile id /{,usr/}bin/id flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/attached/consoles>
+  include <abstractions/attached/nameservice-strict>
+
+  @{exec_path} mr,
+
+  /etc/machine-id r,
+
+  deny @{user_share_dirs}/gvfs-metadata/* r,
+
+  include if exists <local/id>
+}
+
+# vim:syntax=apparmor

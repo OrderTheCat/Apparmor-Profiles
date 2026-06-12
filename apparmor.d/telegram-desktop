@@ -1,0 +1,61 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2017-2021 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/telegram-desktop @{bin}/Telegram /opt/Telegram/Telegram
+@{att} = ""
+profile telegram-desktop /{{,usr/}bin/telegram-desktop,{,usr/}bin/Telegram,opt/Telegram/Telegram} flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/audio-client>
+  include <abstractions/bus-session>
+  include <abstractions/bus/session/org.kde.StatusNotifierWatcher>
+  include <abstractions/dconf-write>
+  include <abstractions/desktop>
+  include <abstractions/enchant>
+  include <abstractions/fontconfig-cache-read>
+  include <abstractions/graphics>
+  include <abstractions/nameservice-strict>
+  include <abstractions/qt5-compose-cache-write>
+  include <abstractions/qt5-settings-write>
+  include <abstractions/qt5-shader-cache>
+  include <abstractions/ssl_certs>
+  include <abstractions/user-download-strict>
+  include <abstractions/video>
+
+  network inet dgram,
+  network inet6 dgram,
+  network inet stream,
+  network inet6 stream,
+  network netlink dgram,
+  network netlink raw,
+
+  @{exec_path} mrix,
+
+  @{sh_path}   rix,
+  @{open_path} rpx -> child-open-strict,
+  @{bin}/systemd-detect-virt rpx,
+
+  owner @{user_share_dirs}/TelegramDesktop/ rw,
+  owner @{user_share_dirs}/TelegramDesktop/** rwlk -> @{user_share_dirs}/TelegramDesktop/**,
+
+  owner @{user_config_dirs}/autostart/telegramdesktop.desktop rw,
+  owner @{user_config_dirs}/autostart/org.telegram.desktop._@{hex32}.desktop{,.@{rand6}} rw,
+
+  owner @{tmp}/@{hex32}-?@{uuid}? rwk,
+  audit owner /dev/shm/#@{int} rw,
+
+  owner @{PROC}/@{pid}/cmdline r,
+  owner @{PROC}/@{pid}/fd/ r,
+  owner @{PROC}/@{pid}/mountinfo r,
+  owner @{PROC}/@{pid}/mounts r,
+  owner @{PROC}/@{pid}/task/@{tid}/comm rw,
+
+  include if exists <local/telegram-desktop>
+}
+
+# vim:syntax=apparmor

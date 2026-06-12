@@ -1,0 +1,115 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2018-2022 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/{,colord/}colord{,-sane}
+@{att} = /att/colord/
+profile colord /{,usr/}lib{,exec,32,64}/{,colord/}colord{,-sane} flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-system>
+  include <abstractions/bus/system/org.freedesktop.Avahi.Server>
+  include <abstractions/bus/system/org.freedesktop.Avahi.ServiceBrowser>
+  include <abstractions/bus/system/org.freedesktop.Avahi.ServiceResolver>
+  include <abstractions/bus/system/org.freedesktop.PolicyKit1>
+  include <abstractions/devices-usb>
+  include <abstractions/mime>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/sys/dmi-full>
+
+  network inet dgram,
+  network inet6 dgram,
+  network netlink raw,
+
+  #aa/dbus own bus=system name=org.freedesktop.ColorManager
+  include <abstractions/bus/system/own>
+  dbus bind bus=system name=org.freedesktop.ColorManager{,.*},
+  dbus receive bus=system path=/org/freedesktop/ColorManager{,/**}
+       interface=org.freedesktop.ColorManager{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=system path=/org/freedesktop/ColorManager{,/**}
+       interface=org.freedesktop.ColorManager{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=system path=/org/freedesktop/ColorManager{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=system path=/org/freedesktop/ColorManager{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=system path=/org/freedesktop/ColorManager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.ColorManager{,.*}}"),
+  dbus send bus=system path=/org/freedesktop/ColorManager{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  @{exec_path} mrix,
+  @{lib}/colord-sane ix,
+
+  /opt/brother/scanner/** r,
+
+  /etc/machine-id r,
+  /etc/sane.d/{,**} r,
+  /etc/snmp/snmp.conf r,
+  /etc/udev/hwdb.bin r,
+
+  /usr/share/color/icc/{,**} r,
+  /usr/share/gvfs/remote-volume-monitors/{,**} r,
+  /usr/share/snmp/mibs/{,*} r,
+
+  / r,
+
+  owner /var/lib/colord/.cache/ rw,
+  owner /var/lib/colord/.cache/** rw,
+  owner /var/lib/colord/{mapping,storage}.db{,-journal} rwk,
+  owner /var/lib/colord/** r,
+
+  owner /var/lib/snmp/{mib,cert}_indexes/ rw,
+  owner /var/lib/snmp/mibs/{iana,ietf}/ r,
+  owner /var/lib/snmp/mibs/{iana,ietf}/[A-Z]* r,
+
+  @{att}@{desktop_share_dirs}/icc/edid-@{hex32}.icc r,
+  @{att}@{user_share_dirs}/icc/edid-@{hex32}.icc r,
+
+  @{att}@{run}/systemd/userdb/io.systemd.Machine rw,
+
+  @{run}/systemd/sessions/* r,
+
+  @{run}/udev/data/+pci:* r,              # Identifies all PCI devices (CPU, GPU, Network, Disks, USB, etc.)
+  @{run}/udev/data/c81:@{int}  r,         # For video4linux
+
+  @{sys}/bus/scsi/devices/ r,
+  @{sys}/class/drm/ r,
+  @{sys}/class/video4linux/ r,
+  @{sys}/devices/**/uevent r,
+  @{sys}/devices/@{pci}/drm/card@{int}/**/edid r,
+  @{sys}/devices/@{pci}/drm/card@{int}/**/enabled r,
+  @{sys}/devices/@{pci}/model r,
+  @{sys}/devices/@{pci}/type r,
+  @{sys}/devices/@{pci}/vendor r,
+
+        @{PROC}/sys/dev/parport/ r,
+        @{PROC}/sys/dev/parport/parport@{int}/base-addr r,
+        @{PROC}/sys/dev/parport/parport@{int}/irq r,
+        @{PROC}/@{pids}/cgroup r,
+        @{PROC}/@{pids}/cmdline r,
+  owner @{PROC}/@{pid}/fd/ r,
+
+  /dev/parport@{int} r,
+
+  include if exists <local/colord>
+}
+
+# vim:syntax=apparmor

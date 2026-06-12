@@ -1,0 +1,24 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2026 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/sleep
+@{att} = /att/sleep/
+profile sleep /{,usr/}bin/sleep flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+
+  signal receive set=term,
+
+  @{exec_path} mr,
+
+  # file_inherit
+  deny owner /dev/pts/@{u8} rw,
+
+  include if exists <local/sleep>
+}
+
+# vim:syntax=apparmor

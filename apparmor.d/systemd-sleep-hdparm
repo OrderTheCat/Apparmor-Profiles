@@ -1,0 +1,38 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/systemd/system-sleep/hdparm
+@{att} = ""
+profile systemd-sleep-hdparm /{,usr/}lib{,exec,32,64}/systemd/system-sleep/hdparm flags=(complain) {
+  include <abstractions/base-strict>
+
+  @{exec_path} mr,
+  @{sh_path} r,
+
+  @{bin}/{,e,f}grep                   rix,
+  @{bin}/sed                          rix,
+  @{bin}/udevadm                       cx -> udevadm,
+  @{lib}/pm-utils/power.d/*hdparm-apm  ix,
+
+  /etc/hdparm.conf r,
+
+  @{PROC}/cmdline r,
+
+  /dev/ r,
+
+  profile udevadm flags=(complain) {
+    include <abstractions/base-strict>
+    include <abstractions/app/udevadm>
+
+    include if exists <local/systemd-sleep-hdparm_udevadm>
+  }
+
+  include if exists <local/systemd-sleep-hdparm>
+}
+
+# vim:syntax=apparmor

@@ -1,0 +1,191 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/gsd-media-keys
+@{att} = /att/gsd-media-keys/
+profile gsd-media-keys /{,usr/}lib{,exec,32,64}/gsd-media-keys flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/audio-client>
+  include <abstractions/bus/session/org.mpris.MediaPlayer2.Player>
+  include <abstractions/bus/system/net.hadess.SensorProxy>
+  include <abstractions/bus/system/org.freedesktop.hostname1>
+  include <abstractions/bus/system/org.freedesktop.login1>
+  include <abstractions/attached/consoles>
+  include <abstractions/dconf-write>
+  include <abstractions/fontconfig-cache-write>
+  include <abstractions/gnome-strict>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/session-manager>
+  include <abstractions/upower-observe>
+
+  signal (receive) set=(term, hup) peer=gdm*,
+
+  network inet stream,
+  network netlink raw,
+
+  #aa/dbus own bus=session name=org.gnome.SettingsDaemon.MediaKeys
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gnome.SettingsDaemon.MediaKeys{,.*},
+  dbus receive bus=session path=/org/gnome/SettingsDaemon/MediaKeys{,/**}
+       interface=org.gnome.SettingsDaemon.MediaKeys{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/SettingsDaemon/MediaKeys{,/**}
+       interface=org.gnome.SettingsDaemon.MediaKeys{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gnome/SettingsDaemon/MediaKeys{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gnome/SettingsDaemon/MediaKeys{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gnome/SettingsDaemon/MediaKeys{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.SettingsDaemon.MediaKeys{,.*}}"),
+  dbus send bus=session path=/org/gnome/SettingsDaemon/MediaKeys{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus talk bus=session name=org.gnome.SettingsDaemon.Power label=gsd-power
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=gsd-power),
+  # org.gnome.SettingsDaemon.Power: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/gnome/SettingsDaemon/Power{,/**}
+       interface=org.gnome.SettingsDaemon.Power{,.*}
+       peer=(name="{@{busname},org.gnome.SettingsDaemon.Power{,.*},org.freedesktop.DBus}", label=gsd-power),
+  dbus send bus=session path=/org/gnome/SettingsDaemon/Power{,/**}
+       interface=org.gnome.SettingsDaemon.Power{,.*}
+       peer=(name="org.gnome.SettingsDaemon.Power{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/gnome/SettingsDaemon/Power{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gnome.SettingsDaemon.Power{,.*},org.freedesktop.DBus}", label=gsd-power),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/gnome/SettingsDaemon/Power{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gnome.SettingsDaemon.Power{,.*},org.freedesktop.DBus}", label=gsd-power),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/gnome/SettingsDaemon/Power{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.SettingsDaemon.Power{,.*},org.freedesktop.DBus}", label=gsd-power),
+  dbus receive bus=session path=/org/gnome/SettingsDaemon/Power{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gnome.SettingsDaemon.Power{,.*},org.freedesktop.DBus}", label=gsd-power),
+
+  #aa/dbus talk bus=session name=org.gnome.SettingsDaemon.Rfkill label=gsd-rfkill
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=gsd-rfkill),
+  # org.gnome.SettingsDaemon.Rfkill: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/gnome/SettingsDaemon/Rfkill{,/**}
+       interface=org.gnome.SettingsDaemon.Rfkill{,.*}
+       peer=(name="{@{busname},org.gnome.SettingsDaemon.Rfkill{,.*},org.freedesktop.DBus}", label=gsd-rfkill),
+  dbus send bus=session path=/org/gnome/SettingsDaemon/Rfkill{,/**}
+       interface=org.gnome.SettingsDaemon.Rfkill{,.*}
+       peer=(name="org.gnome.SettingsDaemon.Rfkill{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/gnome/SettingsDaemon/Rfkill{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gnome.SettingsDaemon.Rfkill{,.*},org.freedesktop.DBus}", label=gsd-rfkill),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/gnome/SettingsDaemon/Rfkill{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gnome.SettingsDaemon.Rfkill{,.*},org.freedesktop.DBus}", label=gsd-rfkill),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/gnome/SettingsDaemon/Rfkill{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.SettingsDaemon.Rfkill{,.*},org.freedesktop.DBus}", label=gsd-rfkill),
+  dbus receive bus=session path=/org/gnome/SettingsDaemon/Rfkill{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gnome.SettingsDaemon.Rfkill{,.*},org.freedesktop.DBus}", label=gsd-rfkill),
+
+  #aa/dbus talk bus=session name=org.gnome.Shell label=gnome-shell
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=gnome-shell),
+  # org.gnome.Shell: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/gnome/Shell{,/**}
+       interface=org.gnome.Shell{,.*}
+       peer=(name="{@{busname},org.gnome.Shell{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  dbus send bus=session path=/org/gnome/Shell{,/**}
+       interface=org.gnome.Shell{,.*}
+       peer=(name="org.gnome.Shell{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/gnome/Shell{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gnome.Shell{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/gnome/Shell{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gnome.Shell{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/gnome/Shell{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.Shell{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  dbus receive bus=session path=/org/gnome/Shell{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gnome.Shell{,.*},org.freedesktop.DBus}", label=gnome-shell),
+
+
+  dbus send bus=session path=/org/mpris/MediaPlayer2
+       interface=org.freedesktop.DBus.Properties
+       member=GetAll
+       peer=(name=@{busname}),
+
+  dbus receive bus=session path=/org/mpris/MediaPlayer2
+       interface=org.freedesktop.DBus.Properties
+       member=PropertiesChanged
+       peer=(name=@{busname}),
+
+  dbus send bus=system path=/org/freedesktop/login1
+       interface=org.freedesktop.login1.Manager
+       member=PowerOff
+       peer=(name=@{busname}, label="@{p_systemd_logind}"),
+
+  dbus send bus=session path=/
+       interface=org.freedesktop.DBus
+       member=ListNames
+       peer=(name=org.freedesktop.DBus, label="@{p_dbus_session}"),
+
+  @{exec_path} mr,
+
+  @{open_path}         rpx -> child-open,
+
+  /usr/share/sounds/freedesktop/stereo/*.oga r,
+
+  @{att}@{run}/systemd/inhibit/@{int}.ref rw,
+
+  @{run}/udev/data/+sound:card@{int} r,   # For sound card
+  @{run}/udev/data/c13:@{int} r,          # for /dev/input/*
+  @{run}/udev/data/c189:@{int} r,         # For /dev/bus/usb/**
+
+  @{sys}/devices/**/uevent r,
+
+        @{PROC}/1/cgroup r,
+  owner @{PROC}/@{pid}/cgroup r,
+
+  include if exists <local/gsd-media-keys>
+}
+
+# vim:syntax=apparmor

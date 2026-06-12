@@ -1,0 +1,182 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/gsd-power
+@{att} = /att/gsd-power/
+profile gsd-power /{,usr/}lib{,exec,32,64}/gsd-power flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/audio-client>
+  include <abstractions/backlight>
+  include <abstractions/bus/system/net.hadess.SensorProxy>
+  include <abstractions/bus/system/org.freedesktop.hostname1>
+  include <abstractions/bus/system/org.freedesktop.login1>
+  include <abstractions/bus/system/org.freedesktop.systemd1>
+  include <abstractions/attached/consoles>
+  include <abstractions/dconf-write>
+  include <abstractions/fontconfig-cache-write>
+  include <abstractions/gnome-strict>
+  include <abstractions/attached/nameservice-strict>
+  include <abstractions/power-profiles>
+  include <abstractions/screensaver>
+  include <abstractions/session-manager>
+  include <abstractions/upower-observe>
+
+  network inet stream,
+  network netlink raw,
+
+  signal receive set=(term, hup) peer=gdm*,
+
+  #aa/dbus own bus=session name=org.gnome.SettingsDaemon.Power
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gnome.SettingsDaemon.Power{,.*},
+  dbus receive bus=session path=/org/gnome/SettingsDaemon/Power{,/**}
+       interface=org.gnome.SettingsDaemon.Power{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/SettingsDaemon/Power{,/**}
+       interface=org.gnome.SettingsDaemon.Power{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gnome/SettingsDaemon/Power{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gnome/SettingsDaemon/Power{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gnome/SettingsDaemon/Power{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.SettingsDaemon.Power{,.*}}"),
+  dbus send bus=session path=/org/gnome/SettingsDaemon/Power{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  #aa/dbus talk bus=session name=org.gnome.Mutter.DisplayConfig label=gnome-shell
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=gnome-shell),
+  # org.gnome.Mutter.DisplayConfig: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/gnome/Mutter/DisplayConfig{,/**}
+       interface=org.gnome.Mutter.DisplayConfig{,.*}
+       peer=(name="{@{busname},org.gnome.Mutter.DisplayConfig{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  dbus send bus=session path=/org/gnome/Mutter/DisplayConfig{,/**}
+       interface=org.gnome.Mutter.DisplayConfig{,.*}
+       peer=(name="org.gnome.Mutter.DisplayConfig{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/gnome/Mutter/DisplayConfig{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gnome.Mutter.DisplayConfig{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/gnome/Mutter/DisplayConfig{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gnome.Mutter.DisplayConfig{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/gnome/Mutter/DisplayConfig{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.Mutter.DisplayConfig{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  dbus receive bus=session path=/org/gnome/Mutter/DisplayConfig{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gnome.Mutter.DisplayConfig{,.*},org.freedesktop.DBus}", label=gnome-shell),
+
+  #aa/dbus talk bus=session name=org.gnome.Shell.Brightness label=gnome-shell
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=gnome-shell),
+  # org.gnome.Shell.Brightness: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/gnome/Shell/Brightness{,/**}
+       interface=org.gnome.Shell.Brightness{,.*}
+       peer=(name="{@{busname},org.gnome.Shell.Brightness{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  dbus send bus=session path=/org/gnome/Shell/Brightness{,/**}
+       interface=org.gnome.Shell.Brightness{,.*}
+       peer=(name="org.gnome.Shell.Brightness{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/gnome/Shell/Brightness{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gnome.Shell.Brightness{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/gnome/Shell/Brightness{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gnome.Shell.Brightness{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/gnome/Shell/Brightness{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.Shell.Brightness{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  dbus receive bus=session path=/org/gnome/Shell/Brightness{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gnome.Shell.Brightness{,.*},org.freedesktop.DBus}", label=gnome-shell),
+
+  #aa/dbus talk bus=system name=org.freedesktop.UPower.PowerProfiles label=power-profiles-daemon
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=power-profiles-daemon),
+  # org.freedesktop.UPower.PowerProfiles: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=system path=/org/freedesktop/UPower/PowerProfiles{,/**}
+       interface=org.freedesktop.UPower.PowerProfiles{,.*}
+       peer=(name="{@{busname},org.freedesktop.UPower.PowerProfiles{,.*},org.freedesktop.DBus}", label=power-profiles-daemon),
+  dbus send bus=system path=/org/freedesktop/UPower/PowerProfiles{,/**}
+       interface=org.freedesktop.UPower.PowerProfiles{,.*}
+       peer=(name="org.freedesktop.UPower.PowerProfiles{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=system path=/org/freedesktop/UPower/PowerProfiles{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.UPower.PowerProfiles{,.*},org.freedesktop.DBus}", label=power-profiles-daemon),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=system path=/org/freedesktop/UPower/PowerProfiles{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.UPower.PowerProfiles{,.*},org.freedesktop.DBus}", label=power-profiles-daemon),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=system path=/org/freedesktop/UPower/PowerProfiles{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.UPower.PowerProfiles{,.*},org.freedesktop.DBus}", label=power-profiles-daemon),
+  dbus receive bus=system path=/org/freedesktop/UPower/PowerProfiles{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.UPower.PowerProfiles{,.*},org.freedesktop.DBus}", label=power-profiles-daemon),
+
+
+  dbus send bus=system path=/org/freedesktop/UPower/KbdBacklight
+       interface=org.freedesktop.UPower.KbdBacklight
+       member=GetBrightness
+       peer=(name=@{busname}, label="@{p_upowerd}"),
+
+  dbus send bus=system path=/org/freedesktop/login1
+       interface=org.freedesktop.login1.Manager
+       member=Suspend
+       peer=(name=@{busname}, label="@{p_systemd_logind}"),
+
+  @{exec_path} mr,
+
+  @{run}/udev/data/+drm:card@{int}-* r,   # For screen outputs
+
+  @{att}@{run}/systemd/inhibit/@{int}.ref rw,
+
+  @{sys}/bus/ r,
+
+  @{sys}/devices/@{pci}/class r,
+
+        @{PROC}/cmdline r,
+        @{PROC}/sys/kernel/osrelease r,
+  owner @{PROC}/@{pid}/cgroup r,
+
+  include if exists <local/gsd-power>
+}
+
+# vim:syntax=apparmor

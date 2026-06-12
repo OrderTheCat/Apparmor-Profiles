@@ -1,0 +1,35 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2022-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/{,ibus/}ibus-memconf
+@{att} = /att/ibus-memconf/
+profile ibus-memconf /{,usr/}lib{,exec,32,64}/{,ibus/}ibus-memconf flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-session>
+  include <abstractions/bus/session/org.gtk.vfs.MountTracker>
+  include <abstractions/attached/consoles>
+  include <abstractions/ibus-strict>
+  include <abstractions/attached/nameservice-strict>
+
+  signal (receive) set=(term) peer=ibus-daemon,
+
+  dbus receive bus=session
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name=@{busname}, label="{gnome-shell,gnome-extension}"),
+
+  @{exec_path} mr,
+
+  owner @{desktop_cache_dirs}/ibus/dbus-@{rand8} rw,
+  owner @{desktop_config_dirs}/ibus/bus/ r,
+  owner @{desktop_config_dirs}/ibus/bus/@{hex32}-unix-{,wayland-}@{int} r,
+
+  include if exists <local/ibus-memconf>
+}
+
+# vim:syntax=apparmor

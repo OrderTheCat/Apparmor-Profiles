@@ -1,0 +1,192 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2017-2022 Mikhail Morfikov
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{bin}/gnome-keyring-daemon
+@{att} = /att/gnome-keyring-daemon/
+profile gnome-keyring-daemon /{,usr/}bin/gnome-keyring-daemon flags=(attach_disconnected,attach_disconnected.path=@{att},complain) {
+  include <abstractions/attached/base>
+  include <abstractions/bus-session>
+  include <abstractions/bus-system>
+  include <abstractions/bus/system/org.freedesktop.login1>
+  include <abstractions/attached/consoles>
+  include <abstractions/session-manager>
+
+  capability ipc_lock,
+
+  signal receive set=(term) peer=gdm,
+  signal send set=(term) peer=ssh-agent,
+
+  unix (send receive) type=stream peer=(label=snap.*),
+  unix (send receive) type=stream peer=(label=fapp),
+  unix (send receive) type=stream peer=(label=fbwrap),
+  unix (send receive) type=stream peer=(label=flatpak.*),
+
+  #aa/dbus own bus=session name=org.gnome.keyring
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gnome.keyring{,.*},
+  dbus receive bus=session path=/org/gnome/keyring{,/**}
+       interface=org.gnome.keyring{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/keyring{,/**}
+       interface=org.gnome.keyring{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gnome/keyring{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gnome/keyring{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gnome/keyring{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.keyring{,.*}}"),
+  dbus send bus=session path=/org/gnome/keyring{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=session name=org.freedesktop.[sS]ecret{,s}{,.*}
+  dbus bind bus=session name=org.freedesktop.[sS]ecret{,s}{,.*}{,.*},
+  dbus receive bus=session path=/org/freedesktop/[sS]ecret{,s}{,/*}{,/**}
+       interface=org.freedesktop.[sS]ecret{,s}{,.*}{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/freedesktop/[sS]ecret{,s}{,/*}{,/**}
+       interface=org.freedesktop.[sS]ecret{,s}{,.*}{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/freedesktop/[sS]ecret{,s}{,/*}{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/freedesktop/[sS]ecret{,s}{,/*}{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/freedesktop/[sS]ecret{,s}{,/*}{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.[sS]ecret{,s}{,.*}{,.*}}"),
+  dbus send bus=session path=/org/freedesktop/[sS]ecret{,s}{,/*}{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus own bus=session name=org.freedesktop.impl.portal.Secret path=/org/freedesktop/portal/desktop
+  dbus bind bus=session name=org.freedesktop.impl.portal.Secret{,.*},
+  dbus receive bus=session path=/org/freedesktop/portal/desktop
+       interface=org.freedesktop.impl.portal.Secret{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/freedesktop/portal/desktop
+       interface=org.freedesktop.impl.portal.Secret{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/freedesktop/portal/desktop
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/freedesktop/portal/desktop
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/freedesktop/portal/desktop
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.impl.portal.Secret{,.*}}"),
+  dbus send bus=session path=/org/freedesktop/portal/desktop
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+  #aa/dbus talk bus=session name=org.freedesktop.impl.portal.Request path=/org/freedesktop/portal/desktop/ label=xdg-desktop-portal
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=xdg-desktop-portal),
+  # org.freedesktop.impl.portal.Request: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/freedesktop/portal/desktop/
+       interface=org.freedesktop.impl.portal.Request{,.*}
+       peer=(name="{@{busname},org.freedesktop.impl.portal.Request{,.*},org.freedesktop.DBus}", label=xdg-desktop-portal),
+  dbus send bus=session path=/org/freedesktop/portal/desktop/
+       interface=org.freedesktop.impl.portal.Request{,.*}
+       peer=(name="org.freedesktop.impl.portal.Request{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/freedesktop/portal/desktop/
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.impl.portal.Request{,.*},org.freedesktop.DBus}", label=xdg-desktop-portal),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/freedesktop/portal/desktop/
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.freedesktop.impl.portal.Request{,.*},org.freedesktop.DBus}", label=xdg-desktop-portal),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/freedesktop/portal/desktop/
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.freedesktop.impl.portal.Request{,.*},org.freedesktop.DBus}", label=xdg-desktop-portal),
+  dbus receive bus=session path=/org/freedesktop/portal/desktop/
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.impl.portal.Request{,.*},org.freedesktop.DBus}", label=xdg-desktop-portal),
+
+
+  dbus receive bus=session
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name=@{busname}, label="{gnome-shell,gnome-extension}"),
+
+  dbus send bus=system path=/org/freedesktop/login1
+       interface=org.freedesktop.login1.Manager
+       member=GetSession
+       peer=(name=org.freedesktop.login1, label="@{p_systemd_logind}"),
+
+  dbus send bus=session path=/org/gnome/SessionManager
+       interface=org.gnome.SessionManager
+       member=Setenv
+       peer=(name=org.gnome.SessionManager, label="@{p_gnome_session}"),
+
+  @{exec_path} mr,
+
+  @{bin}/ssh-add   rix,
+  @{bin}/ssh-agent rpx,
+  @{lib}/gcr-ssh-askpass rpux,
+
+  /etc/gcrypt/hwf.deny r,
+
+  owner @{gdm_local_dirs}/ rw,
+  owner @{gdm_share_dirs}/ rw,
+  owner @{gdm_share_dirs}/keyrings/ rw,
+
+  # Keyrings location
+  owner @{user_share_dirs}/keyrings/ rw,
+  owner @{user_share_dirs}/keyrings/* rwl,
+
+  # Seahorse and SSH keys
+  owner @{HOME}/@{XDG_SSH_DIR}/{,**} r,
+
+  owner @{HOME}/.local/ w,
+  owner @{user_share_dirs}/ w,
+  owner @{run}/user/@{uid}/keyring/ rw,
+  owner @{run}/user/@{uid}/keyring/* rw,
+  owner @{run}/user/@{uid}/ssh-askpass.@{rand6}/{,*} rw,
+        @{run}/user/@{uid}/keyring/control r,
+
+  owner @{PROC}/@{pid}/fd/ r,
+
+  include if exists <local/gnome-keyring-daemon>
+}
+
+# vim:syntax=apparmor

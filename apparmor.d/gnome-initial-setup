@@ -1,0 +1,144 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2023-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{lib}/gnome-initial-setup
+@{att} = ""
+profile gnome-initial-setup /{,usr/}lib{,exec,32,64}/gnome-initial-setup flags=(complain) {
+  include <abstractions/base-strict>
+  include <abstractions/accounts-observe>
+  include <abstractions/dconf-write>
+  include <abstractions/disks-read>
+  include <abstractions/gnome-strict>
+  include <abstractions/graphics>
+  include <abstractions/nameservice-strict>
+  include <abstractions/network-manager-observe>
+  include <abstractions/ssl_certs>
+  include <abstractions/sys/dmi>
+  include <abstractions/webkit>
+
+  network inet dgram,
+  network inet6 dgram,
+  network inet stream,
+  network inet6 stream,
+  network netlink raw,
+
+  #aa/dbus own bus=session name=org.gnome.InitialSetup
+  include <abstractions/bus/session/own>
+  dbus bind bus=session name=org.gnome.InitialSetup{,.*},
+  dbus receive bus=session path=/org/gnome/InitialSetup{,/**}
+       interface=org.gnome.InitialSetup{,.*}
+       peer=(name="@{busname}"),
+  dbus send bus=session path=/org/gnome/InitialSetup{,/**}
+       interface=org.gnome.InitialSetup{,.*}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Properties: reply to properties request from anyone
+  dbus (send receive) bus=session path=/org/gnome/InitialSetup{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+  # DBus.Introspectable: allow clients to introspect the service
+  dbus receive bus=session path=/org/gnome/InitialSetup{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="@{busname}"),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus receive bus=session path=/org/gnome/InitialSetup{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.InitialSetup{,.*}}"),
+  dbus send bus=session path=/org/gnome/InitialSetup{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.freedesktop.DBus}"),
+
+
+  #aa/dbus talk bus=session name=org.gnome.Shell label=gnome-shell
+  # Unix: allow connection to the profile
+  unix type=stream peer=(label=gnome-shell),
+  # org.gnome.Shell: send and receive anything to the interface on the specific peer label
+  dbus (send receive) bus=session path=/org/gnome/Shell{,/**}
+       interface=org.gnome.Shell{,.*}
+       peer=(name="{@{busname},org.gnome.Shell{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  dbus send bus=session path=/org/gnome/Shell{,/**}
+       interface=org.gnome.Shell{,.*}
+       peer=(name="org.gnome.Shell{,.*}"),
+  # DBus.Properties: read and send properties
+  dbus (send receive) bus=session path=/org/gnome/Shell{,/**}
+       interface=org.freedesktop.DBus.Properties
+       member={Get,GetAll,Set,PropertiesChanged}
+       peer=(name="{@{busname},org.gnome.Shell{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  # DBus.Introspectable: allow service introspection
+  dbus send bus=session path=/org/gnome/Shell{,/**}
+       interface=org.freedesktop.DBus.Introspectable
+       member=Introspect
+       peer=(name="{@{busname},org.gnome.Shell{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  # DBus.ObjectManager: allow clients to enumerate sources
+  dbus send bus=session path=/org/gnome/Shell{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member=GetManagedObjects
+       peer=(name="{@{busname},org.gnome.Shell{,.*},org.freedesktop.DBus}", label=gnome-shell),
+  dbus receive bus=session path=/org/gnome/Shell{,/**}
+       interface=org.freedesktop.DBus.ObjectManager
+       member={InterfacesAdded,InterfacesRemoved}
+       peer=(name="{@{busname},org.gnome.Shell{,.*},org.freedesktop.DBus}", label=gnome-shell),
+
+
+  @{exec_path} mr,
+
+  @{bin}/df                   px,
+
+  @{bin}/locale              rix,
+  @{bin}/lsb_release          px,
+  @{bin}/lsblk                px,
+  @{bin}/lscpu                px,
+  @{bin}/lspci                px,
+  @{bin}/systemd-detect-virt  px,
+
+  @{bin}/xrandr               px,
+  @{open_path}                px -> child-open-browsers,
+
+  @{lib}/gnome-initial-setup-goa-helper rix,
+  @{ldd_path} rix,
+
+  /usr/share/gnome-initial-setup/{,**} r,
+  /usr/share/thumbnailers/{,**} r,
+  /usr/share/xml/iso-codes/{,**} r,
+
+  @{etc_ro}/security/pwquality.conf r,
+  @{etc_ro}/security/pwquality.conf.d/{,**} r,
+  /etc/timezone r,
+
+  /etc/gdm{,3}/custom.conf r,
+
+
+
+  owner @{user_config_dirs}/gnome-initial-setup-done w,
+  owner @{user_config_dirs}/gnome-initial-setup-done.@{rand6} rw,
+  owner @{user_config_dirs}/gnome-initial-setup/{,**} rw,
+
+
+  owner @{user_config_dirs}/ibus/bus/ r,
+  owner @{user_config_dirs}/ibus/bus/@{hex32}-unix-{,wayland-}@{int} r,
+
+  owner @{run}/user/@{uid}/avatar.png rw,
+
+  @{run}/snapd.socket rw,
+
+  @{run}/systemd/sessions/@{int} r,
+  @{run}/systemd/users/@{uid} r,
+
+  owner @{sys}/fs/cgroup/user.slice/user-@{uid}.slice/user@@{uid}.service/app.slice/gnome-initial-setup-first-login.service/memory.* r,
+
+        @{PROC}/zoneinfo r,
+  owner @{PROC}/@{pid}/cgroup r,
+  owner @{PROC}/@{pid}/mountinfo r,
+
+  include if exists <local/gnome-initial-setup>
+}
+
+# vim:syntax=apparmor

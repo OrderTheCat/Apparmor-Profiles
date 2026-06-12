@@ -1,0 +1,32 @@
+# apparmor.d - Full set of apparmor profiles
+# Copyright (C) 2021-2024 Alexandre Pujol <alexandre@pujol.io>
+# SPDX-License-Identifier: GPL-2.0-only
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+@{exec_path} = @{sbin}/nfsdcld
+@{att} = ""
+profile nfsdcld /{,usr/}{,s}bin/nfsdcld flags=(complain) {
+  include <abstractions/base-strict>
+
+  capability mknod,
+  capability setpcap,
+
+  @{exec_path} mr,
+
+  /etc/nfs.conf r,
+  /etc/nfs.conf rk,
+  /etc/nfs.conf.d/{,*} r,
+
+  /var/lib/nfs/nfsdcld/{,**} rw,
+  /var/lib/nfs/nfsdcld/main.sqlite rk,
+  /var/lib/nfs/rpc_pipefs/nfsd/* rw,
+
+  @{run}/rpc_pipefs/nfsd/cld rw,
+
+  include if exists <local/nfsdcld>
+}
+
+# vim:syntax=apparmor
