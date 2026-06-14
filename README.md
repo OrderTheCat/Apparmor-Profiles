@@ -14,7 +14,7 @@ mv ~/Apparmor-Profiles/apparmor.d /etc/apparmor.d
 
 If you get a sudo error, then:
 
-Switch to bash, if you're on fish
+Switch to bash if you're on fish
 
 ```bash
 bash
